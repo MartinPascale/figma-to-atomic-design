@@ -5,11 +5,14 @@
   "main": "figma-agent.ts",
   "type": "module",
   "scripts": {
-    "agent": "npx tsx src/main.ts"
+    "agent": "npx tsx main.ts"
   },
   "dependencies": {
     "dotenv": "^16.0.0",
-    "node-fetch": "^3.3.0"
+    "node-fetch": "^3.3.0",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.0.0",
+    "tailwind-merge": "^2.0.0"
   },
   "devDependencies": {
     "tsx": "^4.0.0",

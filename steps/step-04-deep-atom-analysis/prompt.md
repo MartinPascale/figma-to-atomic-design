@@ -4,6 +4,8 @@ Component: {{ATOM_NAME}} ({{ATOM_TYPE}})
 Component Data: {{ATOM_DATA}}
 {{SVG_STATUS}}
 
+Design Tokens Available: {{DESIGN_TOKENS}}
+
 INSTRUCTIONS:
 {{ANALYSIS_INSTRUCTIONS}}
 
@@ -13,12 +15,16 @@ INSTRUCTIONS:
    - Style variations (filled, outline, ghost, link)
    - Size variations (sm, md, lg, xl)
 
-3. **Design Token Extraction**: Extract actual values from fills, strokes, effects:
-   - Background colors from fills array
-   - Text colors from fills in nested TEXT nodes
-   - Border radius from cornerRadius
-   - Padding/spacing from layoutMode and itemSpacing
-   - Typography from fontSize, fontWeight, fontFamily
+3. **Design Token Mapping**: Use the extracted design tokens when available:
+   - Reference colors from design tokens (e.g., "var(--brand-500)" instead of "#3B82F6")
+   - Map component values to design token names where possible
+   - Include both token references AND fallback values
+   - If tokens aren't available, extract actual values from fills, strokes, effects:
+     - Background colors from fills array
+     - Text colors from fills in nested TEXT nodes
+     - Border radius from cornerRadius
+     - Padding/spacing from layoutMode and itemSpacing
+     - Typography from fontSize, fontWeight, fontFamily
 
 4. **Smart Props Generation**: Based on component type and variants found:
    - Buttons: variant (default|destructive|outline|secondary|ghost|link), size (default|sm|lg|icon)
@@ -26,29 +32,47 @@ INSTRUCTIONS:
    - Text: size, weight, color, align
    - Icons: size, color, strokeWidth
 
-Return JSON with ACTUAL extracted values:
+Return JSON with CVA-ready variant structure:
 {
   "shadcnComponent": "exact_component_name",
   "componentDescription": "Brief description of what this component does",
+  "baseClasses": "inline-flex items-center justify-center rounded-md text-sm font-medium",
   "variants": [
     {
-      "name": "variant_name",
-      "description": "When/how to use this variant",
+      "name": "default",
+      "description": "Primary variant for main actions",
       "designValues": {
-        "backgroundColor": "actual_hex_value",
-        "textColor": "actual_hex_value",
-        "borderRadius": "actual_number_px",
-        "padding": "actual_spacing_values"
+        "backgroundColor": "var(--brand-500, #3B82F6)",
+        "textColor": "var(--neutral-0, #ffffff)",
+        "borderRadius": "6px",
+        "padding": "8px 16px"
       },
-      "shadcnProps": {"variant": "default", "size": "md"}
+      "shadcnProps": {
+        "variant": "bg-primary text-primary-foreground hover:bg-primary/90",
+        "size": "h-10 px-4 py-2"
+      }
     }
   ],
-  "designTokens": {
-    "extracted_from_fills_and_strokes": "actual_values_only"
+  "cvaVariants": {
+    "variant": {
+      "default": "bg-primary text-primary-foreground hover:bg-primary/90",
+      "destructive": "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+      "outline": "border border-input bg-background hover:bg-accent hover:text-accent-foreground"
+    },
+    "size": {
+      "default": "h-10 px-4 py-2",
+      "sm": "h-9 rounded-md px-3",
+      "lg": "h-11 rounded-md px-8"
+    }
   },
-  "implementationProps": ["prop1", "prop2"],
+  "designTokens": {
+    "colors": ["var(--brand-500)", "var(--neutral-0)"],
+    "spacing": ["8px", "16px"],
+    "typography": "14px/20px Inter"
+  },
+  "implementationProps": ["variant", "size", "disabled"],
   "usageExamples": [
-    "<Button variant='default' size='md'>Primary Action</Button>",
-    "<Button variant='outline' size='sm'>Secondary</Button>"
+    "<ComponentName variant='default' size='md'>Primary Action</ComponentName>",
+    "<ComponentName variant='outline' size='sm'>Secondary</ComponentName>"
   ]
 }

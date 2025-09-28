@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import 'dotenv/config'
-import { parseUrl, validateApiKeys } from '../steps/step-01-url-processing/script'
-import { getFigmaData, identifySections } from '../steps/step-02-section-identification/script'
-import { discoverAtoms } from '../steps/step-03-atom-discovery/script'
-import { analyzeAtomForImplementation } from '../steps/step-04-deep-atom-analysis/script'
-import { readFileSync, existsSync } from 'fs'
+import { parseUrl, validateApiKeys } from './steps/step-01-url-processing/script'
+import { getFigmaData, identifySections } from './steps/step-02-section-identification/script'
+import { discoverAtoms } from './steps/step-03-atom-discovery/script'
+import { analyzeAtomForImplementation } from './steps/step-04-deep-atom-analysis/script'
+import { extractTokens } from './steps/step-05-token-extraction/script'
+import { readFileSync, existsSync, mkdirSync } from 'fs'
 import { resolve } from 'path'
 
 class ModularFigmaAgent {
@@ -16,6 +17,7 @@ class ModularFigmaAgent {
     this.figmaToken = process.env.FIGMA_ACCESS_TOKEN || ''
     this.claudeApiKey = process.env.ANTHROPIC_API_KEY || ''
     this.loadShadcnComponents()
+    this.setupOutputDirectories()
   }
 
   private loadShadcnComponents(): void {
@@ -39,6 +41,17 @@ class ModularFigmaAgent {
     } catch (error) {
       console.log(`⚠️ Could not load shadcn components list: ${error.message}`)
     }
+  }
+
+  private setupOutputDirectories(): void {
+    const dirs = ['analysis', 'design/tokens', 'src/components/atoms', 'src/components/molecules', 'src/components/organisms']
+    dirs.forEach(dir => {
+      try {
+        mkdirSync(resolve(dir), { recursive: true })
+      } catch (error) {
+        // Directory might already exist, that's fine
+      }
+    })
   }
 
   async run() {
@@ -72,18 +85,19 @@ class ModularFigmaAgent {
 
       // Step 3: Atom Discovery (First Section Only)
       if (sections.length > 0) {
-        console.log(`🔬 Step 3: Discovering atoms in first section: ${sections[0].name}`)
-        const atoms = await discoverAtoms(fileKey, sections[0], this.figmaToken, this.claudeApiKey)
+        const firstSection = sections[0]
+        console.log(`🔬 Step 3: Discovering atoms in first section: ${firstSection.name}`)
+        const atoms = await discoverAtoms(fileKey, firstSection, this.figmaToken, this.claudeApiKey)
 
-        // Step 4: Deep Analysis (First Atom Only)
+        // Step 4 & 5: Comprehensive Atom Analysis (First Atom Only)
         if (atoms.length > 0) {
-          console.log(`🧩 Step 4: Deep analysis of first atom: ${atoms[0].name}`)
+          console.log(`🧩 Step 4 & 5: Comprehensive analysis of first atom: ${atoms[0].name}`)
           console.log(`   📝 Note: Focusing on single atom for comprehensive analysis`)
 
           await analyzeAtomForImplementation(
             fileKey,
             atoms[0],
-            sections[0].name,
+            firstSection.name,
             this.figmaToken,
             this.claudeApiKey,
             this.validShadcnComponents
@@ -145,7 +159,14 @@ STEPS:
   1. URL Processing & API Validation
   2. Section Identification
   3. Atom Discovery
-  4. Deep Implementation Analysis
+  4. Comprehensive Atom Analysis (Tokens + Implementation)
+  5. React Component Generation (CVA + shadcn/ui)
+
+OUTPUT:
+  - components/[atom].component.json  # Complete component data
+  - components/[atom].component.md    # Human-readable analysis
+  - src/components/atoms/[Atom].tsx   # React component
+  - src/globals.css                   # Design tokens as CSS variables
 `)
   }
 }

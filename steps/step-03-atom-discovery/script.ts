@@ -48,7 +48,7 @@ async function identifyAtoms(sectionData: any, sectionName: string, claudeApiKey
     })
   }
 
-  const { loadPrompt } = await import('../../src/utils/prompt-loader')
+  const { loadPrompt } = await import('../../utils/prompt-loader')
 
   const elementList = allElements.map((element: any, i: number) =>
     `${i + 1}. Name: "${element.name}" | Type: ${element.type || 'FRAME'} | ID: ${element.id}`

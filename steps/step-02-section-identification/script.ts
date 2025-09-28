@@ -23,7 +23,7 @@ export async function getFigmaData(fileKey: string, nodeId: string, figmaToken: 
 }
 
 export async function identifySections(pageData: any, claudeApiKey: string): Promise<Array<{id: string, name: string, type: string}>> {
-  const { loadPrompt } = await import('../../src/utils/prompt-loader')
+  const { loadPrompt } = await import('../../utils/prompt-loader')
 
   const childrenList = pageData.children?.map((child: any, i: number) =>
     `${i + 1}. "${child.name}" (id: ${child.id}, y: ${child.y || 0}, height: ${child.height || 0})`

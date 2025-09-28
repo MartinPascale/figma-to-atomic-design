@@ -5,7 +5,7 @@
   "main": "figma-agent.ts",
   "type": "module",
   "scripts": {
-    "agent": "npx tsx figma-agent.ts"
+    "agent": "npx tsx src/main.ts"
   },
   "dependencies": {
     "dotenv": "^16.0.0",

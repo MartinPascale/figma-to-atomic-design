@@ -1,0 +1,22 @@
+{
+  "name": "figma-agent",
+  "version": "1.0.0",
+  "description": "Independent Figma Agent - Uses Figma API + Claude AI to analyze designs and identify atomic components",
+  "main": "figma-agent.ts",
+  "type": "module",
+  "scripts": {
+    "agent": "npx tsx figma-agent.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.0",
+    "node-fetch": "^3.3.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0"
+  },
+  "keywords": ["figma", "ai", "claude", "design-analysis", "atomic-design", "shadcn"],
+  "author": "Your Name",
+  "license": "MIT"
+}

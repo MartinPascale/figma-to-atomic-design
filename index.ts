@@ -1,9 +1,9 @@
-import { parseUrl, validateApiKeys } from '../steps/step-01-url-processing/script.js'
-import { getFigmaData, identifySections } from '../steps/step-02-section-identification/script.js'
-import { discoverAtoms } from '../steps/step-03-atom-discovery/script.js'
-import { analyzeAtomForImplementation } from '../steps/step-04-deep-atom-analysis/script.js'
-import { loadShadcnComponents } from './utils/shadcn-loader.js'
-import { setupOutputDirectories } from './setup/directories.js'
+import { parseUrl, validateApiKeys } from './lib/steps/step-01-url-processing/script.js'
+import { getFigmaData, identifySections } from './lib/steps/step-02-section-identification/script.js'
+import { discoverAtoms } from './lib/steps/step-03-atom-discovery/script.js'
+import { analyzeAtomForImplementation } from './lib/steps/step-04-deep-atom-analysis/script.js'
+import { loadShadcnComponents } from './lib/utils/shadcn-loader.js'
+import { setupOutputDirectories } from './lib/setup/directories.js'
 
 export interface FigmaToAtomicOptions {
   figmaToken: string

@@ -1,11 +1,16 @@
 import { readFileSync, existsSync } from 'fs'
-import { resolve } from 'path'
+import { resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
+
+// Get the directory where this script is located
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
 
 export function loadShadcnComponents(): Set<string> {
   const validComponents = new Set<string>()
 
   try {
-    const componentFile = resolve('resources/shadcn-components.md')
+    const componentFile = resolve(__dirname, '..', 'resources', 'shadcn-components.md')
 
     if (existsSync(componentFile)) {
       const content = readFileSync(componentFile, 'utf-8')

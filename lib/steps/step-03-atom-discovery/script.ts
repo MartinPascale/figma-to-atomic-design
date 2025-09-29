@@ -1,6 +1,12 @@
 import { getFigmaData } from '../step-02-section-identification/script'
 import { writeFileSync, mkdirSync } from 'fs'
-import { dirname } from 'path'
+import { dirname, resolve } from 'path'
+import { fileURLToPath } from 'url'
+
+// Get the root directory of the CLI project
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const rootDir = resolve(__dirname, '..', '..', '..')
 
 export async function discoverAtoms(
   fileKey: string,
@@ -178,7 +184,7 @@ function flattenElements(node: any, elements: any[] = []): any[] {
 
 async function saveAtomsToMarkdown(sectionName: string, atoms: any[], fullAnalysis: string): Promise<void> {
   const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
-  const filename = `outputs/section-analysis-${sectionName.toLowerCase().replace(/\s+/g, '-')}-${timestamp}.md`
+  const filename = resolve(rootDir, `outputs/section-analysis-${sectionName.toLowerCase().replace(/\s+/g, '-')}-${timestamp}.md`)
 
   const markdown = `# Atomic Analysis: ${sectionName}
 

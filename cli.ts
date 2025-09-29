@@ -1,6 +1,7 @@
 #!/usr/bin/env node
+import 'dotenv/config'
 import { FigmaToAtomic } from './index.js'
-import { setupProject } from './setup/project-setup.js'
+import { setupProject } from './lib/setup/project-setup.js'
 
 async function main() {
   const args = process.argv.slice(2)
@@ -17,13 +18,16 @@ async function main() {
     console.log('🚀 Figma to Atomic - Transform designs into React components\n')
 
     // Detect and setup project if needed
-    const projectSetup = await setupProject(options)
-    if (!projectSetup.success) {
-      console.error(`❌ ${projectSetup.error}`)
-      process.exit(1)
+    if (options.skipSetup) {
+      console.log('⏭️  Skipping project setup')
+    } else {
+      const projectSetup = await setupProject(options)
+      if (!projectSetup.success) {
+        console.error(`❌ ${projectSetup.error}`)
+        process.exit(1)
+      }
+      console.log(`✅ Project setup complete: ${projectSetup.type}`)
     }
-
-    console.log(`✅ Project setup complete: ${projectSetup.type}`)
 
     // Run the Figma analysis
     const agent = new FigmaToAtomic({

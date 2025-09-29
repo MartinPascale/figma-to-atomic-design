@@ -1,6 +1,12 @@
 import { getFigmaData } from '../step-02-section-identification/script'
 import { writeFileSync, mkdirSync } from 'fs'
-import { dirname } from 'path'
+import { dirname, resolve } from 'path'
+import { fileURLToPath } from 'url'
+
+// Get the root directory of the CLI project
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const rootDir = resolve(__dirname, '..', '..', '..')
 import { execSync } from 'child_process'
 
 export async function analyzeAtomForImplementation(
@@ -262,11 +268,11 @@ async function generateReactComponent(atom: any, analysis: any, sectionName: str
     if (isVector) {
       // Generate custom SVG component
       componentCode = generateSVGComponent(componentName, atom, svgCode)
-      filename = `outputs/components/${componentName}/${componentName}.tsx`
+      filename = resolve(rootDir, `outputs/components/atoms/${componentName}/${componentName}.tsx`)
     } else {
       // Generate shadcn component with CVA variants
       componentCode = generateShadcnComponent(componentName, analysis, designTokens)
-      filename = `outputs/components/${componentName}/${componentName}.tsx`
+      filename = resolve(rootDir, `outputs/components/atoms/${componentName}/${componentName}.tsx`)
     }
 
     // Validate component code
@@ -279,7 +285,17 @@ async function generateReactComponent(atom: any, analysis: any, sectionName: str
     mkdirSync(dirname(filename), { recursive: true })
     writeFileSync(filename, componentCode)
 
-    console.log(`      📝 Generated React component: ${filename}`)
+    // Also copy to test-project if it exists
+    const testProjectPath = resolve(rootDir, `test-project/src/components/atoms/${componentName}/${componentName}.tsx`)
+    try {
+      mkdirSync(dirname(testProjectPath), { recursive: true })
+      writeFileSync(testProjectPath, componentCode)
+      console.log(`      📝 Generated React component: ${filename}`)
+      console.log(`      📋 Copied to test project: ${testProjectPath}`)
+    } catch (error) {
+      console.log(`      📝 Generated React component: ${filename}`)
+      console.log(`      ⚠️ Could not copy to test project: ${error.message}`)
+    }
   } catch (error) {
     console.log(`      ❌ Failed to generate React component: ${error.message}`)
   }
@@ -449,13 +465,13 @@ async function saveComponentData(atom: any, analysis: any, designTokens: any, sv
   }
 
   // Save JSON data file in component folder
-  const jsonFile = `outputs/components/${componentName}/analysis.json`
+  const jsonFile = resolve(rootDir, `outputs/components/atoms/${componentName}/analysis.json`)
   mkdirSync(dirname(jsonFile), { recursive: true })
   writeFileSync(jsonFile, JSON.stringify(componentData, null, 2))
 
   // Save human-readable markdown (optional but helpful)
   const markdown = generateComponentMarkdown(componentData)
-  const mdFile = `outputs/components/${componentName}/README.md`
+  const mdFile = resolve(rootDir, `outputs/components/atoms/${componentName}/README.md`)
   writeFileSync(mdFile, markdown)
 
   console.log(`      📝 Saved component data:`)

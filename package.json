@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "npx tsx main.ts",
+    "dev": "npx tsx cli.ts",
     "test:demo": "npx tsx test-demo.ts",
     "test:vite": "cd test-project && npm run dev"
   },

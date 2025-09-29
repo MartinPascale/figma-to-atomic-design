@@ -1,8 +1,14 @@
 import { readFileSync } from 'fs'
-import { resolve } from 'path'
+import { resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
+
+// Get the directory where this script is located
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
 
 export function loadPrompt(stepDir: string, variables: Record<string, string> = {}): string {
-  const filePath = resolve(process.cwd(), 'steps', stepDir, 'prompt.md')
+  // Look for steps directory relative to the CLI location, not current working directory
+  const filePath = resolve(__dirname, '..', 'steps', stepDir, 'prompt.md')
 
   try {
     let content = readFileSync(filePath, 'utf-8')

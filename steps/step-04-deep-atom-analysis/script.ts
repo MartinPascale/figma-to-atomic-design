@@ -44,19 +44,12 @@ export async function analyzeAtomForImplementation(
       } else {
         console.log(`      ⚠️ Invalid shadcn component: ${analysis.shadcnComponent} - skipping installation`)
       }
-    } else if (svgCode) {
-      console.log(`      🎨 Creating custom SVG component instead of installing shadcn component`)
-      await createSVGComponent(atom, svgCode, sectionName)
     }
 
     // Generate React component
     await generateReactComponent(atom, analysis, sectionName, svgCode, designTokens)
 
-    // Update component index
-    await updateComponentIndex(atom, analysis)
-
-    // Update main component index
-    await updateMainComponentIndex()
+    // Skip index generation
 
     // Save comprehensive component data
     await saveComponentData(atom, analysis, designTokens, svgCode)
@@ -146,12 +139,8 @@ async function extractSVGFromFigma(nodeId: string): Promise<string | null> {
   }
 }
 
-async function createSVGComponent(atom: any, svgCode: string, sectionName: string): Promise<void> {
-  try {
-    const componentName = atom.name.replace(/\s+/g, '') + 'Icon'
-    const filename = `src/components/icons/${componentName}.tsx`
-
-    const componentCode = `import React from 'react'
+function generateSVGComponent(componentName: string, atom: any, svgCode?: string | null): string {
+  return `import React from 'react'
 
 interface ${componentName}Props {
   className?: string
@@ -165,22 +154,15 @@ export const ${componentName}: React.FC<${componentName}Props> = ({
   color = 'currentColor'
 }) => {
   return (
-    ${svgCode}
+    ${svgCode || `<div className={className}>SVG placeholder for ${atom.name}</div>`}
   )
 }
 
+${componentName}.displayName = "${componentName}"
+
+export { ${componentName} }
 export default ${componentName}
 `
-
-    // Ensure directory exists
-    const dir = dirname(filename)
-    mkdirSync(dir, { recursive: true })
-
-    writeFileSync(filename, componentCode)
-    console.log(`      📝 Created SVG component: ${filename}`)
-  } catch (error) {
-    console.log(`      ❌ Failed to create SVG component: ${error.message}`)
-  }
 }
 
 async function analyzeAtomVariants(atomData: any, atom: any, svgCode: string | null, claudeApiKey: string, designTokens?: any): Promise<any> {
@@ -274,14 +256,18 @@ async function generateReactComponent(atom: any, analysis: any, sectionName: str
     const isVector = svgCode || atom.type === 'icon' || atom.type === 'logo'
     const componentName = atom.name.replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '')
 
-    if (isVector) {
-      // Custom SVG component already handled in createSVGComponent
-      console.log(`      🎨 Custom SVG component handled separately`)
-      return
-    }
+    let componentCode: string
+    let filename: string
 
-    // Generate React component with CVA variants
-    const componentCode = generateShadcnComponent(componentName, analysis, designTokens)
+    if (isVector) {
+      // Generate custom SVG component
+      componentCode = generateSVGComponent(componentName, atom, svgCode)
+      filename = `outputs/components/${componentName}/${componentName}.tsx`
+    } else {
+      // Generate shadcn component with CVA variants
+      componentCode = generateShadcnComponent(componentName, analysis, designTokens)
+      filename = `outputs/components/${componentName}/${componentName}.tsx`
+    }
 
     // Validate component code
     const validation = validateComponentCode(componentCode, componentName)
@@ -289,8 +275,7 @@ async function generateReactComponent(atom: any, analysis: any, sectionName: str
       console.log(`      ⚠️ Component validation warnings: ${validation.warnings.join(', ')}`)
     }
 
-    // Save to src/components/atoms directory
-    const filename = `src/components/atoms/${componentName}.tsx`
+    // Save to component-specific directory
     mkdirSync(dirname(filename), { recursive: true })
     writeFileSync(filename, componentCode)
 
@@ -432,96 +417,7 @@ function validateComponentCode(code: string, componentName: string): { isValid: 
   return { isValid, warnings }
 }
 
-async function updateComponentIndex(atom: any, analysis: any): Promise<void> {
-  try {
-    const isVector = atom.type === 'icon' || atom.type === 'logo'
-    const componentName = atom.name.replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '')
-
-    if (isVector) {
-      // Update icons index
-      await updateIndexFile('src/components/icons/index.ts', `${componentName}Icon`, `./${componentName}Icon`)
-    } else {
-      // Update atoms index
-      await updateIndexFile('src/components/atoms/index.ts', componentName, `./${componentName}`)
-    }
-
-    // Create lib/utils.ts if it doesn't exist
-    await ensureUtilsFile()
-
-    console.log(`      📋 Updated component index for ${componentName}`)
-  } catch (error) {
-    console.log(`      ⚠️ Failed to update component index: ${error.message}`)
-  }
-}
-
-async function updateIndexFile(indexPath: string, componentName: string, importPath: string): Promise<void> {
-  const { readFileSync, writeFileSync, existsSync } = await import('fs')
-  const { dirname } = await import('path')
-
-  // Ensure directory exists
-  mkdirSync(dirname(indexPath), { recursive: true })
-
-  let content = ''
-  if (existsSync(indexPath)) {
-    content = readFileSync(indexPath, 'utf-8')
-  }
-
-  const exportLine = `export { default as ${componentName} } from '${importPath}'`
-
-  // Add export if not already present
-  if (!content.includes(exportLine)) {
-    content += (content ? '\n' : '') + exportLine + '\n'
-    writeFileSync(indexPath, content)
-  }
-}
-
-async function ensureUtilsFile(): Promise<void> {
-  const { writeFileSync, existsSync } = await import('fs')
-  const utilsPath = 'src/lib/utils.ts'
-
-  if (!existsSync(utilsPath)) {
-    mkdirSync(dirname(utilsPath), { recursive: true })
-
-    const utilsContent = `import { type ClassValue, clsx } from "clsx"
-import { twMerge } from "tailwind-merge"
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
-}
-`
-    writeFileSync(utilsPath, utilsContent)
-    console.log(`      🔧 Created lib/utils.ts`)
-  }
-}
-
-async function updateMainComponentIndex(): Promise<void> {
-  try {
-    const { readFileSync, writeFileSync, existsSync } = await import('fs')
-    const mainIndexPath = 'src/components/index.ts'
-
-    let content = `// Auto-generated component index
-// This file is automatically updated when components are generated
-
-`
-
-    // Add atoms export if directory exists
-    if (existsSync('src/components/atoms/index.ts')) {
-      content += `export * from './atoms'\n`
-    }
-
-    // Add icons export if directory exists
-    if (existsSync('src/components/icons/index.ts')) {
-      content += `export * from './icons'\n`
-    }
-
-    mkdirSync(dirname(mainIndexPath), { recursive: true })
-    writeFileSync(mainIndexPath, content)
-
-    console.log(`      📋 Updated main component index`)
-  } catch (error) {
-    console.log(`      ⚠️ Failed to update main component index: ${error.message}`)
-  }
-}
+// Index generation removed - components are in individual folders
 
 async function saveComponentData(atom: any, analysis: any, designTokens: any, svgCode?: string | null): Promise<void> {
   const componentName = atom.name.replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '')
@@ -547,19 +443,19 @@ async function saveComponentData(atom: any, analysis: any, designTokens: any, sv
       usageExamples: analysis.usageExamples || []
     },
     files: {
-      component: isVector ? `src/components/icons/${componentName}Icon.tsx` : `src/components/atoms/${componentName}.tsx`,
+      component: `outputs/components/${componentName}/${componentName}.tsx`,
       svgCode: svgCode || null
     }
   }
 
-  // Save JSON data file
-  const jsonFile = `components/${componentName}.component.json`
+  // Save JSON data file in component folder
+  const jsonFile = `outputs/components/${componentName}/analysis.json`
   mkdirSync(dirname(jsonFile), { recursive: true })
   writeFileSync(jsonFile, JSON.stringify(componentData, null, 2))
 
   // Save human-readable markdown (optional but helpful)
   const markdown = generateComponentMarkdown(componentData)
-  const mdFile = `components/${componentName}.component.md`
+  const mdFile = `outputs/components/${componentName}/README.md`
   writeFileSync(mdFile, markdown)
 
   console.log(`      📝 Saved component data:`)

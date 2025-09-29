@@ -1,11 +1,17 @@
 {
-  "name": "figma-agent",
+  "name": "figma-to-atomic",
   "version": "1.0.0",
-  "description": "Independent Figma Agent - Uses Figma API + Claude AI to analyze designs and identify atomic components",
-  "main": "figma-agent.ts",
+  "description": "Transform Figma designs into production-ready React components with atomic design, shadcn/ui, and design tokens",
+  "main": "dist/index.js",
   "type": "module",
+  "bin": {
+    "figma-atomic": "dist/cli.js"
+  },
   "scripts": {
-    "agent": "npx tsx main.ts"
+    "build": "tsc",
+    "dev": "npx tsx main.ts",
+    "test:demo": "npx tsx test-demo.ts",
+    "test:vite": "cd test-project && npm run dev"
   },
   "dependencies": {
     "dotenv": "^16.0.0",

@@ -44,7 +44,12 @@ class ModularFigmaAgent {
   }
 
   private setupOutputDirectories(): void {
-    const dirs = ['analysis', 'design/tokens', 'src/components/atoms', 'src/components/molecules', 'src/components/organisms']
+    // Clean previous outputs
+    this.cleanPreviousOutputs()
+
+    const dirs = [
+      'outputs/components'
+    ]
     dirs.forEach(dir => {
       try {
         mkdirSync(resolve(dir), { recursive: true })
@@ -52,6 +57,18 @@ class ModularFigmaAgent {
         // Directory might already exist, that's fine
       }
     })
+  }
+
+  private cleanPreviousOutputs(): void {
+    try {
+      const { rmSync, existsSync } = require('fs')
+      if (existsSync('outputs')) {
+        rmSync('outputs', { recursive: true, force: true })
+        console.log('🧹 Cleaned previous outputs')
+      }
+    } catch (error) {
+      console.log('⚠️ Could not clean previous outputs, continuing...')
+    }
   }
 
   async run() {
@@ -162,11 +179,13 @@ STEPS:
   4. Comprehensive Atom Analysis (Tokens + Implementation)
   5. React Component Generation (CVA + shadcn/ui)
 
-OUTPUT:
-  - components/[atom].component.json  # Complete component data
-  - components/[atom].component.md    # Human-readable analysis
-  - src/components/atoms/[Atom].tsx   # React component
-  - src/globals.css                   # Design tokens as CSS variables
+OUTPUT (organized in outputs/ folder):
+  - outputs/components/[ComponentName]/
+    - [ComponentName].tsx                      # React component
+    - analysis.json                           # Complete component data
+    - README.md                               # Human-readable analysis
+  - outputs/section-analysis-*.md             # Section analysis
+  - outputs/globals.css                       # Design tokens
 `)
   }
 }

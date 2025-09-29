@@ -117,53 +117,88 @@ async function generateGlobalCSS(tokens: any, outputDir: string): Promise<void> 
       fs.readFileSync(resolve('templates', 'globals.css'), 'utf-8')
     )
 
-    // Generate CSS variables from tokens
-    const colorVariables = tokens.colors?.primitives?.map((color: any) =>
-      `    --${color.name}: ${color.value};`
-    ).join('\n') || ''
+    // Generate updated primitive color tokens from Figma
+    const extractedColors = tokens.colors?.primitives || []
+    const updatedColorVariables = extractedColors.map((color: any) =>
+      `  --${color.name}: ${color.value};`
+    ).join('\n')
 
-    const typographyVariables = tokens.typography?.map((typo: any) =>
-      `    --font-${typo.name.replace(/[^a-zA-Z0-9]/g, '-')}: ${typo.sizePx}px/${typo.lineHeightPx || typo.sizePx * 1.2}px ${typo.family};`
-    ).join('\n') || ''
+    // Generate updated spacing tokens from Figma
+    const extractedSpacing = tokens.spacing?.scalePx || []
+    const updatedSpacingVariables = extractedSpacing.map((space: number) =>
+      `  --space-${space / 4}: ${space}px;`  // Convert to Tailwind scale (4px base)
+    ).join('\n')
 
-    const spacingVariables = tokens.spacing?.scalePx?.map((space: number) =>
-      `    --space-${space}: ${space}px;`
-    ).join('\n') || ''
+    // Generate updated radius tokens from Figma
+    const extractedRadii = tokens.radii || []
+    const updatedRadiusVariables = extractedRadii.map((radius: any) =>
+      `  --${radius.name.replace(/[^a-zA-Z0-9]/g, '-')}: ${radius.valuePx}px;`
+    ).join('\n')
 
-    const radiusVariables = tokens.radii?.map((radius: any) =>
-      `    --${radius.name}: ${radius.valuePx}px;`
-    ).join('\n') || ''
+    // Generate updated shadow tokens from Figma
+    const extractedShadows = tokens.shadows || []
+    const updatedShadowVariables = extractedShadows.map((shadow: any) =>
+      `  --${shadow.name}: ${shadow.value};`
+    ).join('\n')
 
-    const shadowVariables = tokens.shadows?.map((shadow: any) =>
-      `    --${shadow.name}: ${shadow.value};`
-    ).join('\n') || ''
+    // Create a comment block with the extracted tokens
+    const figmaTokenComment = `
+/*
+   EXTRACTED FIGMA TOKENS - UPDATE PRIMITIVES ABOVE
+   ================================================
 
-    // Replace template variables
-    let content = templateContent
-      .replace('/* Generated from Figma analysis:\n     * Colors: {{FIGMA_COLORS}}\n     * Typography: {{FIGMA_TYPOGRAPHY}}\n     * Spacing: {{FIGMA_SPACING}}\n     * Borders: {{FIGMA_BORDERS}}\n     * Shadows: {{FIGMA_SHADOWS}}\n     */',
-        `/* Generated from Figma design tokens */
-${colorVariables}
+   Colors found in this design:
+${extractedColors.map((c: any) => `   --${c.name}: ${c.value}; /* Used in: ${c.usages?.join(', ') || 'Unknown'} */`).join('\n')}
 
-    /* Typography tokens */
-${typographyVariables}
+   Spacing found in this design:
+${extractedSpacing.map((s: number) => `   --space-${s / 4}: ${s}px;`).join('\n')}
 
-    /* Spacing tokens */
-${spacingVariables}
+   Radii found in this design:
+${extractedRadii.map((r: any) => `   --${r.name}: ${r.valuePx}px; /* Used in: ${r.usages?.join(', ') || 'Unknown'} */`).join('\n')}
 
-    /* Border radius tokens */
-${radiusVariables}
+   Typography found in this design:
+${(tokens.typography || []).map((t: any) => `   Font: ${t.family} ${t.style} ${t.sizePx}px/${t.lineHeightPx || 'auto'}px`).join('\n')}
+*/`
 
-    /* Shadow tokens */
-${shadowVariables}`)
+    // Insert the Figma tokens comment before the role tokens section
+    let content = templateContent.replace(
+      '/* ---------------------------------------\n   2) Role tokens (map primitives to usage)',
+      figmaTokenComment + '\n\n/* ---------------------------------------\n   2) Role tokens (map primitives to usage)'
+    )
 
-    // Save the globals.css file
-    const globalsFile = resolve('src', 'globals.css')
+    // Update role tokens to reference the extracted primitives
+    if (extractedColors.length > 0) {
+      // Find common colors and update role tokens
+      const neutralColors = extractedColors.filter((c: any) => c.name.includes('neutral'))
+      const brandColors = extractedColors.filter((c: any) => c.name.includes('brand') || c.name.includes('primary'))
+
+      if (neutralColors.length > 0) {
+        const lightestNeutral = neutralColors.find((c: any) => c.name.includes('0') || c.name.includes('50'))
+        const darkestNeutral = neutralColors.find((c: any) => c.name.includes('900') || c.name.includes('800'))
+
+        if (lightestNeutral) {
+          content = content.replace('--bg-surface: var(--neutral-0);', `--bg-surface: var(--${lightestNeutral.name});`)
+        }
+        if (darkestNeutral) {
+          content = content.replace('--fg-primary: var(--neutral-900);', `--fg-primary: var(--${darkestNeutral.name});`)
+        }
+      }
+
+      if (brandColors.length > 0) {
+        const primaryBrand = brandColors[0]
+        content = content.replace('--accent: var(--brand-500);', `--accent: var(--${primaryBrand.name});`)
+      }
+    }
+
+    // Save the globals.css file to outputs directory
+    const globalsFile = resolve('outputs', 'globals.css')
     await import('fs').then(fs => {
-      import('fs').then(fsModule => fsModule.mkdirSync(resolve('src'), { recursive: true }))
+      import('fs').then(fsModule => fsModule.mkdirSync(resolve('outputs'), { recursive: true }))
       fs.writeFileSync(globalsFile, content)
     })
 
-    console.log(`   🎨 Generated globals.css with design tokens: ${globalsFile}`)
+    console.log(`   🎨 Updated globals.css with Figma design tokens: ${globalsFile}`)
+    console.log(`   📝 Check the comment block in globals.css for extracted tokens`)
   } catch (error) {
     console.log(`   ⚠️ Failed to generate globals.css: ${error.message}`)
   }

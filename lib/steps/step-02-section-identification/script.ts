@@ -81,17 +81,9 @@ function basicSectionAnalysis(pageData: any): Array<{id: string, name: string, t
 
   return pageData.children.map((child: any, index: number) => {
     const name = child.name?.replace(/[_-]/g, ' ').trim() || `Section ${index + 1}`
-    const lowerName = name.toLowerCase()
-    const isFirst = index === 0
-    const isLast = index === pageData.children.length - 1
 
-    let type = 'section'
-    if (isFirst && lowerName.includes('header')) type = 'header'
-    else if (isLast && lowerName.includes('footer')) type = 'footer'
-    else if (lowerName.includes('hero') || lowerName.includes('banner')) type = 'hero'
-    else if (lowerName.includes('nav')) type = 'navigation'
-    else if (lowerName.includes('content') || lowerName.includes('product')) type = 'content'
-
-    return { id: child.id, name, type }
+    // Simple fallback - let Claude handle type identification in the prompt
+    // Only use 'section' as default type if Claude analysis fails
+    return { id: child.id, name, type: 'section' }
   })
 }

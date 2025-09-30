@@ -1,7 +1,9 @@
 import { parseUrl, validateApiKeys } from './lib/steps/step-01-url-processing/script.js'
 import { getFigmaData, identifySections } from './lib/steps/step-02-section-identification/script.js'
 import { discoverAtoms } from './lib/steps/step-03-atom-discovery/script.js'
-import { analyzeAtomForImplementation } from './lib/steps/step-04-deep-atom-analysis/script.js'
+import { extractAtomTokensAndVariants } from './lib/steps/step-04-deep-atom-analysis/script.js'
+import { generateAtomicComponent } from './lib/steps/step-05-component-generation/script.js'
+import { generateComponentShowcase } from './lib/steps/step-06-component-showcase/script.js'
 import { loadShadcnComponents } from './lib/utils/shadcn-loader.js'
 import { setupOutputDirectories } from './lib/setup/directories.js'
 
@@ -62,31 +64,86 @@ export class FigmaToAtomic {
         console.log(`🔬 Step 3: Discovering atoms in first section: ${firstSection.name}`)
         const atoms = await discoverAtoms(fileKey, firstSection, this.figmaToken, this.claudeApiKey)
 
-        // Step 4 & 5: Comprehensive Atom Analysis (First Atom Only)
-        if (atoms.length > 0) {
-          console.log(`🧩 Step 4: Comprehensive analysis of first atom: ${atoms[0].name}`)
+        // Group atoms by type to avoid processing duplicates
+        const uniqueComponents = this.groupAtomsByType(atoms)
+        console.log(`🧩 Processing ${uniqueComponents.length} unique component types (from ${atoms.length} instances)...`)
 
-          // Set the output directory for the analysis
-          process.env.FIGMA_ATOMIC_OUTPUT_DIR = this.outputDir
+        const processedComponents = []
 
-          await analyzeAtomForImplementation(
+        for (let i = 0; i < uniqueComponents.length; i++) {
+          const componentGroup = uniqueComponents[i]
+          const atom = componentGroup.representative // Use one instance as representative
+          console.log(`\n🔬 [${i + 1}/${uniqueComponents.length}] Processing ${componentGroup.type}: ${atom.name} (${componentGroup.instances.length} instances)`)
+
+          // Step 4: Extract Tokens and Variants
+          console.log(`   📊 Extracting tokens and variants...`)
+          const tokenVariantData = await extractAtomTokensAndVariants(
             fileKey,
-            atoms[0],
+            atom,
             firstSection.name,
             this.figmaToken,
-            this.claudeApiKey,
-            this.validShadcnComponents
+            this.claudeApiKey
           )
 
-          console.log(`\n   ⏭️  Remaining atoms (${atoms.length - 1}) available for future analysis:`)
-          atoms.slice(1).forEach((atom, i) => {
-            console.log(`      ${i + 2}. ${atom.name} (${atom.type}) - ID: ${atom.id}`)
-          })
+          if (tokenVariantData) {
+            console.log(`   ✅ Token/variant extraction completed`)
+
+            // Step 5: Generate Atomic Component + Update CSS Theme
+            console.log(`   🔧 Generating component and updating CSS theme...`)
+            await generateAtomicComponent(tokenVariantData, this.claudeApiKey, this.outputDir)
+
+            processedComponents.push({
+              name: componentGroup.type, // Use component type as name
+              type: atom.type,
+              componentName: componentGroup.type.charAt(0).toUpperCase() + componentGroup.type.slice(1), // Capitalize component type
+              variants: tokenVariantData.variantAnalysis?.variants || [],
+              instanceCount: componentGroup.instances.length
+            })
+
+            console.log(`   ✅ Component ${atom.name} added to atomic system`)
+          } else {
+            console.log(`   ⚠️ Token/variant extraction failed for ${atom.name}`)
+          }
+        }
+
+        // Step 6: Generate Component Showcase in App.tsx
+        if (processedComponents.length > 0) {
+          console.log(`\n🎨 Step 6: Generating component showcase in App.tsx...`)
+          await generateComponentShowcase(this.claudeApiKey, 'test-project')
         }
       }
 
     } catch (error) {
       throw new Error(`Analysis failed: ${error.message}`)
     }
+  }
+
+
+  private groupAtomsByType(atoms: any[]): any[] {
+    const groups = new Map()
+
+    for (const atom of atoms) {
+      const key = atom.type // Group by component type (input, button, checkbox, etc.)
+
+      if (!groups.has(key)) {
+        groups.set(key, {
+          type: key,
+          representative: atom, // First instance as representative
+          instances: []
+        })
+      }
+
+      groups.get(key).instances.push(atom)
+    }
+
+    const uniqueComponents = Array.from(groups.values())
+
+    // Log grouped components for visibility
+    console.log(`   📊 Grouped into unique types:`)
+    uniqueComponents.forEach(group => {
+      console.log(`      • ${group.type}: ${group.instances.length} instances`)
+    })
+
+    return uniqueComponents
   }
 }

@@ -29,9 +29,35 @@ Page Data:
 Children:
 {{CHILDREN_LIST}}
 
-Task: For each child, determine:
-1. Clean readable name (remove underscores, technical suffixes)
-2. Section type: header, hero, navigation, content, footer, or section
+## Section Type Identification
+
+For each child element, analyze the name, position, and context to determine the most appropriate section type:
+
+**Available Types:**
+- `header` - Top navigation, site header, page header
+- `hero` - Main banner, hero section, primary call-to-action area
+- `navigation` - Main navigation menu, breadcrumbs, menu bars
+- `content` - Main content area, product sections, body content
+- `footer` - Bottom section, site footer, contact info
+- `section` - Generic section, misc content, sidebar
+
+**Classification Guidelines:**
+- Consider position: First elements often headers, last often footers
+- Analyze names: Look for keywords like "header", "nav", "hero", "banner", "footer", "content"
+- Consider common UI patterns: Headers at top, footers at bottom, heroes after headers
+- Use context: Multiple content sections can exist, use specific names when possible
+
+**Name Cleaning:**
+- Remove underscores, hyphens, technical suffixes
+- Convert to readable format
+- Keep meaningful descriptive terms
 
 Return JSON array with format:
 [{"id": "child.id", "name": "Clean Name", "type": "section_type"}]
+
+Example:
+[
+  {"id": "123", "name": "Site Header", "type": "header"},
+  {"id": "456", "name": "Hero Banner", "type": "hero"},
+  {"id": "789", "name": "Product Grid", "type": "content"}
+]

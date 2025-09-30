@@ -9,15 +9,20 @@ const __dirname = dirname(__filename)
 const rootDir = resolve(__dirname, '..', '..', '..')
 import { execSync } from 'child_process'
 
-export async function analyzeAtomForImplementation(
+export async function extractAtomTokensAndVariants(
   fileKey: string,
   atom: any,
   sectionName: string,
   figmaToken: string,
-  claudeApiKey: string,
-  validShadcnComponents: Set<string>
-): Promise<void> {
+  claudeApiKey: string
+): Promise<any> {
   try {
+    // Skip only if explicitly marked by step 3 (text/icon components filtered out there)
+    if (atom.skipImplementation) {
+      console.log(`      ⏭️  Skipping component marked for skip: ${atom.name}`)
+      return null
+    }
+
     console.log(`      📡 Getting detailed data for ${atom.name}...`)
 
     // Get detailed component data from Figma API
@@ -27,51 +32,47 @@ export async function analyzeAtomForImplementation(
     console.log(`      🎨 Extracting design tokens for ${atom.name}...`)
     const designTokens = await extractAtomTokens(atomData, atom, claudeApiKey)
 
-    // Handle vector elements differently - extract SVG
-    let svgCode = null
-    if (atom.type === 'icon' || atom.type === 'logo' || atomData.type === 'VECTOR') {
-      console.log(`      🖼️ Extracting SVG code for vector element...`)
-      svgCode = await extractSVGFromFigma(atom.id)
-    }
-
     // Analyze variants and properties with Claude
-    const analysis = await analyzeAtomVariants(atomData, atom, svgCode, claudeApiKey, designTokens)
+    console.log(`      🔍 Analyzing variants and properties for ${atom.name}...`)
+    const variantAnalysis = await analyzeAtomVariants(atomData, atom, claudeApiKey, designTokens)
 
-    console.log(`      📊 Found ${analysis.variants?.length || 0} variants`)
-    analysis.variants?.forEach((variant, i) => {
+    console.log(`      📊 Found ${variantAnalysis.variants?.length || 0} variants`)
+    variantAnalysis.variants?.forEach((variant, i) => {
       console.log(`         ${i + 1}. ${variant.name} - ${variant.description}`)
     })
 
-    // Install shadcn component only if it's valid and not a vector
-    if (analysis.shadcnComponent && !svgCode) {
-      if (validShadcnComponents.has(analysis.shadcnComponent)) {
-        console.log(`      📦 Installing shadcn component: ${analysis.shadcnComponent}`)
-        await installShadcnComponent(analysis.shadcnComponent)
-      } else {
-        console.log(`      ⚠️ Invalid shadcn component: ${analysis.shadcnComponent} - skipping installation`)
-      }
+    // Combine all analysis data
+    const analysisData = {
+      atom: {
+        id: atom.id,
+        name: atom.name,
+        type: atom.type,
+        skipImplementation: atom.skipImplementation || false
+      },
+      designTokens,
+      variantAnalysis,
+      analyzedAt: new Date().toISOString()
     }
 
-    // Generate React component
-    await generateReactComponent(atom, analysis, sectionName, svgCode, designTokens)
+    // Save only one analysis file (will be used by step-05)
+    await saveTokenVariantAnalysis(atom, analysisData)
 
-    // Skip index generation
-
-    // Save comprehensive component data
-    await saveComponentData(atom, analysis, designTokens, svgCode)
+    return analysisData
 
   } catch (error) {
     console.log(`      ❌ Failed to analyze ${atom.name}: ${error.message}`)
+    return null
   }
 }
 
 async function extractAtomTokens(atomData: any, atom: any, claudeApiKey: string): Promise<any> {
   const { loadPrompt } = await import('../../utils/prompt-loader')
 
-  const prompt = loadPrompt('step-05-token-extraction', {
-    FIGMA_FILE_KEY: 'atom-specific',
-    NODE_ID: atom.id,
-    SECTION_DATA: JSON.stringify(atomData, null, 2)
+  const prompt = loadPrompt('step-04-deep-atom-analysis', {
+    ATOM_NAME: atom.name,
+    ATOM_TYPE: atom.type,
+    ATOM_DATA: JSON.stringify(atomData, null, 2),
+    DESIGN_TOKENS: 'Extracted from Figma API data'
   })
 
   try {
@@ -132,75 +133,17 @@ async function extractAtomTokens(atomData: any, atom: any, claudeApiKey: string)
   }
 }
 
-async function extractSVGFromFigma(nodeId: string): Promise<string | null> {
-  try {
-    // Note: This is a placeholder for MCP integration
-    // In a real implementation, this would use the Figma MCP get_code tool
-    // For now, we'll return null and handle it gracefully
-    console.log(`      🔧 MCP SVG extraction not yet implemented for node ${nodeId}`)
-    return null
-  } catch (error) {
-    console.log(`      ❌ Failed to extract SVG: ${error.message}`)
-    return null
-  }
-}
+// Removed extractSVGFromFigma - SVG extraction will be handled in step-05 if needed
 
-function generateSVGComponent(componentName: string, atom: any, svgCode?: string | null): string {
-  return `import React from 'react'
+// Removed generateSVGComponent - this will be handled in step-05
 
-interface ${componentName}Props {
-  className?: string
-  size?: number
-  color?: string
-}
-
-export const ${componentName}: React.FC<${componentName}Props> = ({
-  className,
-  size = 24,
-  color = 'currentColor'
-}) => {
-  return (
-    ${svgCode || `<div className={className}>SVG placeholder for ${atom.name}</div>`}
-  )
-}
-
-${componentName}.displayName = "${componentName}"
-
-export { ${componentName} }
-export default ${componentName}
-`
-}
-
-async function analyzeAtomVariants(atomData: any, atom: any, svgCode: string | null, claudeApiKey: string, designTokens?: any): Promise<any> {
+async function analyzeAtomVariants(atomData: any, atom: any, claudeApiKey: string, designTokens?: any): Promise<any> {
   const { loadPrompt } = await import('../../utils/prompt-loader')
-  const isVector = svgCode || atom.type === 'icon' || atom.type === 'logo' || atomData.type === 'VECTOR'
-
-  const analysisInstructions = isVector ? `
-**VECTOR/ICON COMPONENT ANALYSIS:**
-1. **Component Type**: This is a vector/icon element - DO NOT map to shadcn components
-2. **Analysis Focus**:
-   - Extract visual properties (colors, stroke width, size)
-   - Identify use cases and variants
-   - Design custom component props (size, color, className)
-3. **Implementation**: Custom React component with SVG
-` : `
-**SHADCN COMPONENT ANALYSIS:**
-1. **Component Mapping**: Map to the closest shadcn/ui component from this EXACT list:
-   - button, input, badge, avatar, separator, checkbox, switch, select, textarea, label
-   - accordion, alert, alert-dialog, breadcrumb, calendar, card, carousel, chart
-   - collapsible, combobox, command, context-menu, data-table, date-picker
-   - dialog, drawer, dropdown-menu, form, hover-card, navigation-menu, pagination
-   - popover, progress, radio-group, scroll-area, sheet, sidebar, skeleton
-   - slider, sonner, table, tabs, toast, toggle, toggle-group, tooltip
-   - ONLY use these exact names - if no match, return "custom"`
 
   const prompt = loadPrompt('step-04-deep-atom-analysis', {
-    IMPLEMENTATION_TYPE: isVector ? ' as a custom icon/vector component' : ' with shadcn/ui',
     ATOM_NAME: atom.name,
     ATOM_TYPE: atom.type,
     ATOM_DATA: JSON.stringify(atomData, null, 2),
-    SVG_STATUS: svgCode ? 'SVG Code Available: Yes' : 'SVG Code: None',
-    ANALYSIS_INSTRUCTIONS: analysisInstructions,
     DESIGN_TOKENS: designTokens ? JSON.stringify(designTokens, null, 2) : 'No design tokens available'
   })
 
@@ -247,278 +190,63 @@ async function analyzeAtomVariants(atomData: any, atom: any, svgCode: string | n
   }
 }
 
-async function installShadcnComponent(componentName: string): Promise<void> {
-  try {
-    console.log(`      ⚡ Running: npx shadcn@latest add ${componentName}`)
-    execSync(`npx shadcn@latest add ${componentName}`, { stdio: 'pipe' })
-    console.log(`      ✅ Installed ${componentName}`)
-  } catch (error) {
-    console.log(`      ❌ Failed to install ${componentName}: ${error.message}`)
-  }
-}
+// Removed installShadcnComponent - this will be handled in step-05
 
-async function generateReactComponent(atom: any, analysis: any, sectionName: string, svgCode?: string | null, designTokens?: any): Promise<void> {
-  try {
-    const isVector = svgCode || atom.type === 'icon' || atom.type === 'logo'
-    const componentName = atom.name.replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '')
+// Removed generateReactComponent - this will be handled in step-05
 
-    let componentCode: string
-    let filename: string
+// Removed generateShadcnComponent - this will be handled in step-05
 
-    if (isVector) {
-      // Generate custom SVG component
-      componentCode = generateSVGComponent(componentName, atom, svgCode)
-      filename = resolve(rootDir, `outputs/components/atoms/${componentName}/${componentName}.tsx`)
-    } else {
-      // Generate shadcn component with CVA variants
-      componentCode = generateShadcnComponent(componentName, analysis, designTokens)
-      filename = resolve(rootDir, `outputs/components/atoms/${componentName}/${componentName}.tsx`)
-    }
+// Removed generateFallbackVariants - this will be handled in step-05
 
-    // Validate component code
-    const validation = validateComponentCode(componentCode, componentName)
-    if (!validation.isValid) {
-      console.log(`      ⚠️ Component validation warnings: ${validation.warnings.join(', ')}`)
-    }
+// Removed getDefaultVariants - this will be handled in step-05
 
-    // Save to component-specific directory
-    mkdirSync(dirname(filename), { recursive: true })
-    writeFileSync(filename, componentCode)
+// Removed validateComponentCode - this will be handled in step-05
 
-    // Also copy to test-project if it exists
-    const testProjectPath = resolve(rootDir, `test-project/src/components/atoms/${componentName}/${componentName}.tsx`)
-    try {
-      mkdirSync(dirname(testProjectPath), { recursive: true })
-      writeFileSync(testProjectPath, componentCode)
-      console.log(`      📝 Generated React component: ${filename}`)
-      console.log(`      📋 Copied to test project: ${testProjectPath}`)
-    } catch (error) {
-      console.log(`      📝 Generated React component: ${filename}`)
-      console.log(`      ⚠️ Could not copy to test project: ${error.message}`)
-    }
-  } catch (error) {
-    console.log(`      ❌ Failed to generate React component: ${error.message}`)
-  }
-}
+// Component generation removed - this will be handled in step-05
 
-function generateShadcnComponent(componentName: string, analysis: any, designTokens?: any): string {
-  const shadcnComponent = analysis.shadcnComponent || 'Button'
-  const baseClasses = analysis.baseClasses || 'inline-flex items-center justify-center'
-  const cvaVariants = analysis.cvaVariants || {}
-
-  // Use CVA variants from analysis, or fallback to generated ones
-  const variantConfig = Object.keys(cvaVariants).length > 0
-    ? cvaVariants
-    : generateFallbackVariants(analysis.variants || [])
-
-  // Get default variant values
-  const defaultVariants = getDefaultVariants(variantConfig)
-
-  return `import React from 'react'
-import { cva, type VariantProps } from 'class-variance-authority'
-import { cn } from '@/lib/utils'
-import { ${shadcnComponent} } from '@/components/ui/${analysis.shadcnComponent?.toLowerCase() || 'button'}'
-
-const ${componentName.toLowerCase()}Variants = cva(
-  "${baseClasses}",
-  {
-    variants: ${JSON.stringify(variantConfig, null, 6)},
-    defaultVariants: ${JSON.stringify(defaultVariants, null, 6)}
-  }
-)
-
-export interface ${componentName}Props
-  extends React.ComponentProps<typeof ${shadcnComponent}>,
-    VariantProps<typeof ${componentName.toLowerCase()}Variants> {
-  children?: React.ReactNode
-}
-
-const ${componentName} = React.forwardRef<
-  React.ElementRef<typeof ${shadcnComponent}>,
-  ${componentName}Props
->(({ className, variant, children, ...props }, ref) => {
-  return (
-    <${shadcnComponent}
-      className={cn(${componentName.toLowerCase()}Variants({ variant, className }))}
-      ref={ref}
-      {...props}
-    >
-      {children}
-    </${shadcnComponent}>
-  )
-})
-
-${componentName}.displayName = "${componentName}"
-
-export { ${componentName}, ${componentName.toLowerCase()}Variants }
-export default ${componentName}
-`
-}
-
-function generateFallbackVariants(variants: any[]): any {
-  const fallback: any = {}
-
-  variants.forEach((variant: any) => {
-    if (variant.shadcnProps) {
-      Object.entries(variant.shadcnProps).forEach(([key, value]) => {
-        if (!fallback[key]) fallback[key] = {}
-        fallback[key][variant.name.toLowerCase().replace(/\s+/g, '-')] = value
-      })
-    }
-  })
-
-  // Ensure we have at least variant and size
-  if (!fallback.variant) {
-    fallback.variant = {
-      default: "bg-primary text-primary-foreground hover:bg-primary/90"
-    }
-  }
-  if (!fallback.size) {
-    fallback.size = {
-      default: "h-10 px-4 py-2"
-    }
-  }
-
-  return fallback
-}
-
-function getDefaultVariants(variantConfig: any): any {
-  const defaults: any = {}
-
-  Object.keys(variantConfig).forEach(key => {
-    const variants = Object.keys(variantConfig[key])
-    defaults[key] = variants.includes('default') ? 'default' : variants[0]
-  })
-
-  return defaults
-}
-
-function validateComponentCode(code: string, componentName: string): { isValid: boolean, warnings: string[] } {
-  const warnings: string[] = []
-  let isValid = true
-
-  // Check for required imports
-  if (!code.includes("import React from 'react'")) {
-    warnings.push('Missing React import')
-    isValid = false
-  }
-
-  if (!code.includes('class-variance-authority')) {
-    warnings.push('Missing CVA import')
-  }
-
-  // Check for proper component structure
-  if (!code.includes(`const ${componentName} = React.forwardRef`)) {
-    warnings.push('Component not using forwardRef pattern')
-  }
-
-  if (!code.includes('displayName')) {
-    warnings.push('Missing displayName')
-  }
-
-  // Check for proper exports
-  if (!code.includes(`export { ${componentName}`)) {
-    warnings.push('Missing named export')
-  }
-
-  if (!code.includes(`export default ${componentName}`)) {
-    warnings.push('Missing default export')
-  }
-
-  // Check for TypeScript interfaces
-  if (!code.includes(`interface ${componentName}Props`)) {
-    warnings.push('Missing props interface')
-  }
-
-  return { isValid, warnings }
-}
-
-// Index generation removed - components are in individual folders
-
-async function saveComponentData(atom: any, analysis: any, designTokens: any, svgCode?: string | null): Promise<void> {
+async function saveTokenVariantAnalysis(atom: any, analysisData: any): Promise<void> {
   const componentName = atom.name.replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '')
-  const isVector = svgCode || atom.type === 'icon' || atom.type === 'logo'
 
-  // Create comprehensive component data
-  const componentData = {
-    meta: {
-      name: atom.name,
-      cleanName: componentName,
-      type: atom.type,
-      figmaId: atom.id,
-      isVector,
-      generatedAt: new Date().toISOString()
-    },
-    designTokens,
-    implementation: {
-      shadcnComponent: analysis.shadcnComponent,
-      baseClasses: analysis.baseClasses,
-      variants: analysis.variants || [],
-      cvaVariants: analysis.cvaVariants || {},
-      props: analysis.implementationProps || [],
-      usageExamples: analysis.usageExamples || []
-    },
-    files: {
-      component: `outputs/components/${componentName}/${componentName}.tsx`,
-      svgCode: svgCode || null
-    }
-  }
+  // Save only ONE analysis file in JSON format (will be used by step-05)
+  const analysisFile = resolve(rootDir, `outputs/components/atoms/${componentName}/analysis.json`)
+  mkdirSync(dirname(analysisFile), { recursive: true })
+  writeFileSync(analysisFile, JSON.stringify(analysisData, null, 2))
 
-  // Save JSON data file in component folder
-  const jsonFile = resolve(rootDir, `outputs/components/atoms/${componentName}/analysis.json`)
-  mkdirSync(dirname(jsonFile), { recursive: true })
-  writeFileSync(jsonFile, JSON.stringify(componentData, null, 2))
-
-  // Save human-readable markdown (optional but helpful)
-  const markdown = generateComponentMarkdown(componentData)
-  const mdFile = resolve(rootDir, `outputs/components/atoms/${componentName}/README.md`)
-  writeFileSync(mdFile, markdown)
-
-  console.log(`      📝 Saved component data:`)
-  console.log(`         JSON: ${jsonFile}`)
-  console.log(`         MD:   ${mdFile}`)
+  console.log(`      📝 Saved analysis: ${analysisFile}`)
 }
 
-function generateComponentMarkdown(data: any): string {
-  const { meta, designTokens, implementation, files } = data
+function generateTokenVariantMarkdown(data: any): string {
+  const { atom, designTokens, variantAnalysis, analyzedAt } = data
 
-  return `# ${meta.name}
+  return `# ${atom.name} - Token & Variant Analysis
 
-**Type:** ${meta.type}
-**Generated:** ${new Date(meta.generatedAt).toLocaleString()}
-**Figma ID:** ${meta.figmaId}
-**Implementation:** ${meta.isVector ? 'Custom SVG' : 'shadcn/ui'}
-
-## Component Files
-- **Component:** \`${files.component}\`
-${files.svgCode ? `- **SVG Code:** Available` : ''}
+**Type:** ${atom.type}
+**Generated:** ${new Date(analyzedAt).toLocaleString()}
+**Figma ID:** ${atom.id}
+**Skip Implementation:** ${atom.skipImplementation ? 'Yes' : 'No'}
 
 ## Design Tokens
 \`\`\`json
 ${JSON.stringify(designTokens, null, 2)}
 \`\`\`
 
-## Implementation
-- **Base Component:** ${implementation.shadcnComponent || 'Custom'}
-- **Base Classes:** \`${implementation.baseClasses || 'N/A'}\`
-- **Variants:** ${implementation.variants.length}
-- **Props:** ${implementation.props.join(', ') || 'None'}
+## Variant Analysis
+\`\`\`json
+${JSON.stringify(variantAnalysis, null, 2)}
+\`\`\`
 
-## Variants
-${implementation.variants.map((variant: any, i: number) => `### ${i + 1}. ${variant.name}
+## Variants Found
+${variantAnalysis.variants?.map((variant: any, i: number) => `### ${i + 1}. ${variant.name}
 ${variant.description}
 
 **Design Values:**
 ${variant.designValues ? Object.entries(variant.designValues).map(([key, value]) => `- ${key}: \`${value}\``).join('\n') : 'None'}
 `).join('\n') || 'No variants defined'}
 
-## Usage
-\`\`\`tsx
-import { ${meta.cleanName} } from '@/components'
-
-<${meta.cleanName} ${implementation.props.map((prop: string) => `${prop}="..."`).join(' ')} />
-\`\`\`
+## Next Steps
+- Step 05: Generate shadcn/ui component based on these tokens and variants
+- Implementation type: ${atom.skipImplementation ? 'Skipped' : 'Shadcn UI Component'}
 
 ---
-*Generated by Figma Agent*`
+*Generated by Figma Agent - Step 04*`
 }

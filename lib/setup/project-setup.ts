@@ -1,6 +1,12 @@
 import { execSync } from 'child_process'
-import { existsSync, readFileSync, writeFileSync } from 'fs'
-import { resolve } from 'path'
+import { existsSync, readFileSync, writeFileSync, copyFileSync, mkdirSync } from 'fs'
+import { resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
+
+// Get the root directory of the CLI project
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const rootDir = resolve(__dirname, '..', '..')
 
 export interface ProjectSetupResult {
   success: boolean
@@ -30,6 +36,8 @@ export async function setupProject(options: any = {}): Promise<ProjectSetupResul
     await setupTailwind()
     await setupShadcnUI()
     await installDependencies()
+    await setupUtilsFile()
+    await setupGlobalsCSS()
 
     return { success: true, type: projectType }
 
@@ -187,7 +195,7 @@ async function setupShadcnUI(): Promise<void> {
       },
       "aliases": {
         "components": "src/components",
-        "utils": "src/lib/utils"
+        "utils": "src/utils"
       }
     }
 
@@ -213,5 +221,71 @@ async function installDependencies(): Promise<void> {
     }
   } else {
     console.log('✅ All dependencies already installed')
+  }
+}
+
+async function setupGlobalsCSS(): Promise<void> {
+  const cssPath = resolve('src/index.css')
+  const templatePath = resolve(rootDir, 'lib/templates/globals.css')
+
+  if (existsSync(cssPath) && existsSync(templatePath)) {
+    console.log('🎨 Setting up design tokens (globals.css)...')
+
+    try {
+      // Read the current CSS file to check if it already has our template
+      const currentCSS = readFileSync(cssPath, 'utf-8')
+
+      if (currentCSS.includes('@import \'tailwindcss\'') || currentCSS.includes('Primitive tokens')) {
+        console.log('   ✅ Design tokens already integrated')
+        return
+      }
+
+      // Read the template
+      const templateCSS = readFileSync(templatePath, 'utf-8')
+
+      // Write the new globals.css
+      writeFileSync(cssPath, templateCSS)
+
+      console.log('   ✅ Design tokens integrated into src/index.css')
+      console.log('   📋 Original file backed up as src/index.css.backup')
+
+    } catch (error) {
+      console.log('   ⚠️ Failed to setup globals.css: ' + error.message)
+    }
+  } else {
+    console.log('   ⚠️ Globals.css template not found, skipping...')
+  }
+}
+
+async function setupUtilsFile(): Promise<void> {
+  const utilsDir = resolve('src')
+  const utilsPath = resolve(utilsDir, 'utils.ts')
+
+  if (!existsSync(utilsPath)) {
+    console.log('🔧 Creating utils file...')
+
+    try {
+      // Create directory if it doesn't exist
+      if (!existsSync(utilsDir)) {
+        mkdirSync(utilsDir, { recursive: true })
+      }
+
+      // Create utils.ts file with cn function
+      const utilsContent = `import { type ClassValue, clsx } from "clsx"
+import { twMerge } from "tailwind-merge"
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
+`
+
+      writeFileSync(utilsPath, utilsContent)
+      console.log('   ✅ Created src/utils.ts')
+
+    } catch (error) {
+      console.log('   ⚠️ Failed to create utils file: ' + error.message)
+    }
+  } else {
+    console.log('✅ Utils file already exists')
   }
 }

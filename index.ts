@@ -14,10 +14,37 @@ export interface FigmaToAtomicOptions {
   skipSetup?: boolean
 }
 
+interface AtomInstance {
+  id: string
+  name: string
+  type: string
+  skipImplementation?: boolean
+}
+
+interface ComponentGroup {
+  type: string
+  representative: AtomInstance
+  instances: AtomInstance[]
+}
+
+interface ProcessedComponent {
+  name: string
+  type: string
+  componentName: string
+  variants: any[]
+  instanceCount: number
+}
+
+interface Section {
+  id: string
+  name: string
+  type: string
+}
+
 export class FigmaToAtomic {
-  private figmaToken: string
-  private claudeApiKey: string
-  private outputDir: string
+  private readonly figmaToken: string
+  private readonly claudeApiKey: string
+  private readonly outputDir: string
   private validShadcnComponents: Set<string> = new Set()
 
   constructor(options: FigmaToAtomicOptions) {
@@ -25,16 +52,16 @@ export class FigmaToAtomic {
     this.claudeApiKey = options.claudeApiKey
     this.outputDir = options.outputDir || './src'
 
-    this.loadShadcnComponents()
-    this.setupOutputDirectories()
+    this.initializeShadcnComponents()
+    this.initializeOutputDirectories()
   }
 
-  private loadShadcnComponents(): void {
+  private initializeShadcnComponents(): void {
     this.validShadcnComponents = loadShadcnComponents()
     console.log(`📋 Loaded ${this.validShadcnComponents.size} valid shadcn components`)
   }
 
-  private setupOutputDirectories(): void {
+  private initializeOutputDirectories(): void {
     setupOutputDirectories(this.outputDir)
   }
 
@@ -42,108 +69,164 @@ export class FigmaToAtomic {
     console.log(`📄 Analyzing: ${figmaUrl}`)
 
     try {
-      // Step 1: URL Processing & API Validation
-      console.log('🔍 Step 1: Processing URL and validating APIs...')
-      validateApiKeys(this.figmaToken, this.claudeApiKey)
-      const { nodeId, fileKey } = parseUrl(figmaUrl)
-      console.log(`   File: ${fileKey}, Node: ${nodeId}`)
+      const { nodeId, fileKey } = await this.processUrlAndValidateAPIs(figmaUrl)
+      const sections = await this.identifyFigmaSections(fileKey, nodeId)
 
-      // Step 2: Section Identification
-      console.log('📡 Step 2: Fetching page data and identifying sections...')
-      const pageData = await getFigmaData(fileKey, nodeId, this.figmaToken)
-      const sections = await identifySections(pageData, this.claudeApiKey)
-
-      console.log(`✅ Found ${sections.length} sections:`)
-      sections.forEach((section, i) => {
-        console.log(`   ${i + 1}. ${section.name} (${section.type}) [${section.id}]`)
-      })
-
-      // Step 3: Atom Discovery (First Section Only)
       if (sections.length > 0) {
-        const firstSection = sections[0]
-        console.log(`🔬 Step 3: Discovering atoms in first section: ${firstSection.name}`)
-        const atoms = await discoverAtoms(fileKey, firstSection, this.figmaToken, this.claudeApiKey)
-
-        // Group atoms by type to avoid processing duplicates
-        const uniqueComponents = this.groupAtomsByType(atoms)
-        console.log(`🧩 Processing ${uniqueComponents.length} unique component types (from ${atoms.length} instances)...`)
-
-        const processedComponents = []
-
-        for (let i = 0; i < uniqueComponents.length; i++) {
-          const componentGroup = uniqueComponents[i]
-          const atom = componentGroup.representative // Use one instance as representative
-          console.log(`\n🔬 [${i + 1}/${uniqueComponents.length}] Processing ${componentGroup.type}: ${atom.name} (${componentGroup.instances.length} instances)`)
-
-          // Step 4: Extract Tokens and Variants
-          console.log(`   📊 Extracting tokens and variants...`)
-          const tokenVariantData = await extractAtomTokensAndVariants(
-            fileKey,
-            atom,
-            firstSection.name,
-            this.figmaToken,
-            this.claudeApiKey
-          )
-
-          if (tokenVariantData) {
-            console.log(`   ✅ Token/variant extraction completed`)
-
-            // Step 5: Generate Atomic Component + Update CSS Theme
-            console.log(`   🔧 Generating component and updating CSS theme...`)
-            await generateAtomicComponent(tokenVariantData, this.claudeApiKey, this.outputDir)
-
-            processedComponents.push({
-              name: componentGroup.type, // Use component type as name
-              type: atom.type,
-              componentName: componentGroup.type.charAt(0).toUpperCase() + componentGroup.type.slice(1), // Capitalize component type
-              variants: tokenVariantData.variantAnalysis?.variants || [],
-              instanceCount: componentGroup.instances.length
-            })
-
-            console.log(`   ✅ Component ${atom.name} added to atomic system`)
-          } else {
-            console.log(`   ⚠️ Token/variant extraction failed for ${atom.name}`)
-          }
-        }
-
-        // Step 6: Generate Component Showcase in App.tsx
-        if (processedComponents.length > 0) {
-          console.log(`\n🎨 Step 6: Generating component showcase in App.tsx...`)
-          await generateComponentShowcase(this.claudeApiKey, 'test-project')
-        }
+        await this.processAtomicComponents(fileKey, sections[0])
       }
 
-    } catch (error) {
+    } catch (error: any) {
       throw new Error(`Analysis failed: ${error.message}`)
     }
   }
 
+  private async processUrlAndValidateAPIs(figmaUrl: string): Promise<{ nodeId: string; fileKey: string }> {
+    console.log('🔍 Step 1: Processing URL and validating APIs...')
 
-  private groupAtomsByType(atoms: any[]): any[] {
-    const groups = new Map()
+    validateApiKeys(this.figmaToken, this.claudeApiKey)
+    const { nodeId, fileKey } = parseUrl(figmaUrl)
+
+    console.log(`   File: ${fileKey}, Node: ${nodeId}`)
+    return { nodeId, fileKey }
+  }
+
+  private async identifyFigmaSections(fileKey: string, nodeId: string): Promise<Section[]> {
+    console.log('📡 Step 2: Fetching page data and identifying sections...')
+
+    const pageData = await getFigmaData(fileKey, nodeId, this.figmaToken)
+    const sections = await identifySections(pageData, this.claudeApiKey)
+
+    console.log(`✅ Found ${sections.length} sections:`)
+    sections.forEach((section, index) => {
+      console.log(`   ${index + 1}. ${section.name} (${section.type}) [${section.id}]`)
+    })
+
+    return sections
+  }
+
+  private async processAtomicComponents(fileKey: string, firstSection: Section): Promise<void> {
+    console.log(`🔬 Step 3: Discovering atoms in first section: ${firstSection.name}`)
+
+    const discoveredAtoms = await discoverAtoms(fileKey, firstSection, this.figmaToken, this.claudeApiKey)
+    const componentGroups = this.groupAtomsByType(discoveredAtoms)
+
+    console.log(`🧩 Processing ${componentGroups.length} unique component types (from ${discoveredAtoms.length} instances)...`)
+
+    const processedComponents = await this.generateComponents(fileKey, firstSection, componentGroups)
+
+    if (processedComponents.length > 0) {
+      await this.generateShowcase()
+    }
+  }
+
+  private async generateComponents(
+    fileKey: string,
+    section: Section,
+    componentGroups: ComponentGroup[]
+  ): Promise<ProcessedComponent[]> {
+    const processedComponents: ProcessedComponent[] = []
+
+    for (let i = 0; i < componentGroups.length; i++) {
+      const componentGroup = componentGroups[i]
+      const representativeAtom = componentGroup.representative
+
+      console.log(`\n🔬 [${i + 1}/${componentGroups.length}] Processing ${componentGroup.type}: ${representativeAtom.name} (${componentGroup.instances.length} instances)`)
+
+      const tokenVariantData = await this.extractTokensAndVariants(
+        fileKey,
+        representativeAtom,
+        section.name
+      )
+
+      if (tokenVariantData) {
+        console.log(`   ✅ Token/variant extraction completed`)
+
+        await this.generateComponentFiles(tokenVariantData)
+
+        const processedComponent = this.createProcessedComponent(componentGroup, representativeAtom, tokenVariantData)
+        processedComponents.push(processedComponent)
+
+        console.log(`   ✅ Component ${representativeAtom.name} added to atomic system`)
+      } else {
+        console.log(`   ⚠️ Token/variant extraction failed for ${representativeAtom.name}`)
+      }
+    }
+
+    return processedComponents
+  }
+
+  private async extractTokensAndVariants(
+    fileKey: string,
+    atom: AtomInstance,
+    sectionName: string
+  ): Promise<any> {
+    console.log(`   📊 Extracting tokens and variants...`)
+
+    return await extractAtomTokensAndVariants(
+      fileKey,
+      atom,
+      sectionName,
+      this.figmaToken,
+      this.claudeApiKey
+    )
+  }
+
+  private async generateComponentFiles(tokenVariantData: any): Promise<void> {
+    console.log(`   🔧 Generating component and updating CSS theme...`)
+    await generateAtomicComponent(tokenVariantData, this.claudeApiKey, this.outputDir)
+  }
+
+  private createProcessedComponent(
+    componentGroup: ComponentGroup,
+    atom: AtomInstance,
+    tokenVariantData: any
+  ): ProcessedComponent {
+    return {
+      name: componentGroup.type,
+      type: atom.type,
+      componentName: this.capitalizeComponentType(componentGroup.type),
+      variants: tokenVariantData.variantAnalysis?.variants || [],
+      instanceCount: componentGroup.instances.length
+    }
+  }
+
+  private capitalizeComponentType(type: string): string {
+    return type.charAt(0).toUpperCase() + type.slice(1)
+  }
+
+  private async generateShowcase(): Promise<void> {
+    console.log(`\n🎨 Step 6: Generating component showcase in App.tsx...`)
+    await generateComponentShowcase(this.claudeApiKey, 'test-project')
+  }
+
+  private groupAtomsByType(atoms: AtomInstance[]): ComponentGroup[] {
+    const componentGroups = new Map<string, ComponentGroup>()
 
     for (const atom of atoms) {
-      const key = atom.type // Group by component type (input, button, checkbox, etc.)
+      const componentType = atom.type
 
-      if (!groups.has(key)) {
-        groups.set(key, {
-          type: key,
-          representative: atom, // First instance as representative
+      if (!componentGroups.has(componentType)) {
+        componentGroups.set(componentType, {
+          type: componentType,
+          representative: atom,
           instances: []
         })
       }
 
-      groups.get(key).instances.push(atom)
+      componentGroups.get(componentType)!.instances.push(atom)
     }
 
-    const uniqueComponents = Array.from(groups.values())
+    const uniqueComponentGroups = Array.from(componentGroups.values())
 
-    // Log grouped components for visibility
+    this.logComponentGroups(uniqueComponentGroups)
+    return uniqueComponentGroups
+  }
+
+  private logComponentGroups(groups: ComponentGroup[]): void {
     console.log(`   📊 Grouped into unique types:`)
-    uniqueComponents.forEach(group => {
+    groups.forEach(group => {
       console.log(`      • ${group.type}: ${group.instances.length} instances`)
     })
-
-    return uniqueComponents
   }
 }

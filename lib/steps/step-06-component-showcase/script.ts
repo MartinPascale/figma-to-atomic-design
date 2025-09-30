@@ -1,11 +1,18 @@
-import { writeFileSync, readFileSync, existsSync, readdirSync, statSync } from 'fs'
+import { writeFileSync, existsSync, readdirSync, statSync } from 'fs'
 import { dirname, resolve } from 'path'
 import { fileURLToPath } from 'url'
+import { loadShadcnComponents } from '../../utils/shadcn-loader.js'
 
 // Get the root directory of the CLI project
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
-const rootDir = resolve(__dirname, '..', '..', '..')
+const CLI_ROOT_DIR = resolve(__dirname, '..', '..', '..')
+
+interface ComponentInfo {
+  name: string
+  type: string
+  path: string
+}
 
 export async function generateComponentShowcase(
   claudeApiKey: string,
@@ -14,36 +21,32 @@ export async function generateComponentShowcase(
   console.log(`\n   🎨 Generating component showcase in App.tsx...`)
 
   try {
-    // Find all generated atomic components
-    const componentFiles = findGeneratedComponents(projectDir)
+    const discoveredComponents = discoverAtomicComponents(projectDir)
 
-    if (componentFiles.length === 0) {
+    if (discoveredComponents.length === 0) {
       console.log(`      ❌ No atomic components found in ${projectDir}/src/components/atoms/`)
       return
     }
 
-    console.log(`      📦 Found ${componentFiles.length} atomic components:`)
-    componentFiles.forEach(comp => {
-      console.log(`         - ${comp.name} (${comp.type})`)
+    console.log(`      📦 Found ${discoveredComponents.length} atomic components:`)
+    discoveredComponents.forEach(component => {
+      console.log(`         - ${component.name} (${component.type})`)
     })
 
-    // Target App.tsx file
-    const appFilePath = resolve(rootDir, projectDir, 'src', 'App.tsx')
+    const appFilePath = resolve(CLI_ROOT_DIR, projectDir, 'src', 'App.tsx')
 
     if (!existsSync(appFilePath)) {
       console.log(`      ❌ App.tsx not found at: ${appFilePath}`)
       return
     }
 
-    // Generate showcase using AI
-    const showcaseContent = await generateShowcaseWithAI(
-      componentFiles,
+    const showcaseContent = await generateShowcaseWithClaude(
+      discoveredComponents,
       appFilePath,
       claudeApiKey
     )
 
     if (showcaseContent) {
-      // Write the showcase to App.tsx
       writeFileSync(appFilePath, showcaseContent)
 
       console.log(`      ✅ Component showcase generated successfully`)
@@ -53,69 +56,71 @@ export async function generateComponentShowcase(
       console.log(`      ❌ Failed to generate showcase content`)
     }
 
-  } catch (error) {
+  } catch (error: any) {
     console.log(`      ❌ Showcase generation failed: ${error.message}`)
   }
 }
 
-function findGeneratedComponents(projectDir: string): Array<{name: string, type: string, path: string}> {
-  const atomsDir = resolve(rootDir, projectDir, 'src', 'components', 'atoms')
+function discoverAtomicComponents(projectDir: string): ComponentInfo[] {
+  const atomsDirectory = resolve(CLI_ROOT_DIR, projectDir, 'src', 'components', 'atoms')
 
-  if (!existsSync(atomsDir)) {
+  if (!existsSync(atomsDirectory)) {
     return []
   }
 
-  const components = []
+  const components: ComponentInfo[] = []
+  const shadcnComponents = loadShadcnComponents()
 
   try {
-    // Find all component directories
-    const entries = readdirSync(atomsDir)
+    const directoryEntries = readdirSync(atomsDirectory)
 
-    for (const entry of entries) {
-      const entryPath = resolve(atomsDir, entry)
-      const stat = statSync(entryPath)
+    for (const entry of directoryEntries) {
+      const entryPath = resolve(atomsDirectory, entry)
+      const entryStats = statSync(entryPath)
 
-      if (stat.isDirectory()) {
+      if (entryStats.isDirectory()) {
         const componentName = entry
-        const componentPath = resolve(entryPath, `${componentName}.tsx`)
+        const componentFile = resolve(entryPath, `${componentName}.tsx`)
 
-        if (existsSync(componentPath)) {
-          // Determine component type based on common patterns
-          let type = 'component'
-          if (componentName.toLowerCase().includes('button')) type = 'button'
-          else if (componentName.toLowerCase().includes('input')) type = 'input'
-          else if (componentName.toLowerCase().includes('card')) type = 'card'
-          else if (componentName.toLowerCase().includes('checkbox')) type = 'checkbox'
-          else if (componentName.toLowerCase().includes('select')) type = 'select'
-          else if (componentName.toLowerCase().includes('pagination')) type = 'pagination'
+        if (existsSync(componentFile)) {
+          const componentType = determineComponentType(componentName, shadcnComponents)
 
           components.push({
             name: componentName,
-            type: type,
-            path: componentPath
+            type: componentType,
+            path: componentFile
           })
         }
       }
     }
-  } catch (error) {
-    console.log(`      ⚠️ Error reading atoms directory: ${(error as Error).message}`)
+  } catch (error: any) {
+    console.log(`      ⚠️ Error reading atoms directory: ${error.message}`)
   }
 
   return components.sort((a, b) => a.name.localeCompare(b.name))
 }
 
-async function generateShowcaseWithAI(
-  components: Array<{name: string, type: string, path: string}>,
+function determineComponentType(componentName: string, shadcnComponents: Set<string>): string {
+  const lowercaseName = componentName.toLowerCase()
+
+  // Check if the component name matches any shadcn component
+  for (const shadcnComponent of shadcnComponents) {
+    if (lowercaseName.includes(shadcnComponent.toLowerCase())) {
+      return shadcnComponent
+    }
+  }
+
+  return 'component'
+}
+
+async function generateShowcaseWithClaude(
+  components: ComponentInfo[],
   appFilePath: string,
   claudeApiKey: string
 ): Promise<string | null> {
-
   const { loadPrompt } = await import('../../utils/prompt-loader')
 
-  // Create component list for the prompt
-  const componentList = components.map(comp =>
-    `- ${comp.name} (${comp.type}) - ./components/atoms/${comp.name}/${comp.name}`
-  ).join('\n')
+  const componentList = formatComponentListForPrompt(components)
 
   const prompt = loadPrompt('step-06-component-showcase', {
     COMPONENT_LIST: componentList,
@@ -123,110 +128,132 @@ async function generateShowcaseWithAI(
   })
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': claudeApiKey,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4000,
-        messages: [{
-          role: 'user',
-          content: prompt
-        }]
-      })
-    })
+    const claudeResponse = await callClaudeAPI(prompt, claudeApiKey)
+    console.log(`      🤖 Claude response length: ${claudeResponse.length} chars`)
 
-    if (!response.ok) {
-      throw new Error(`Claude API error: ${response.status}`)
-    }
+    const showcaseContent = extractShowcaseContent(claudeResponse)
 
-    const result = await response.json()
-    const content = result.content[0]?.text || ''
-
-    console.log(`      🤖 Claude response length: ${content.length} chars`)
-
-    // Parse delimiter-based response
-    const appContentMatch = content.match(/---APP_CONTENT---\s*\n([\s\S]*?)(?:\n---NOTES---|$)/)
-
-    if (appContentMatch) {
-      let appContent = appContentMatch[1].trim()
-
-      // Clean up any formatting issues
-      appContent = cleanupGeneratedCode(appContent)
-
-      console.log(`      ✅ Extracted App.tsx content (${appContent.length} chars)`)
-
-      // Extract notes if available
-      const notesMatch = content.match(/---NOTES---\s*\n([\s\S]*?)$/)
-      if (notesMatch) {
-        const notes = notesMatch[1].trim()
-        console.log(`      📝 Implementation notes: ${notes.substring(0, 100)}...`)
-      }
-
-      return appContent
+    if (showcaseContent) {
+      console.log(`      ✅ Extracted App.tsx content (${showcaseContent.length} chars)`)
+      return showcaseContent
     } else {
       console.log(`      ⚠️ No ---APP_CONTENT--- section found in response`)
-      console.log(`      🔍 Response preview: ${content.substring(0, 200)}...`)
+      console.log(`      🔍 Response preview: ${claudeResponse.substring(0, 200)}...`)
       return null
     }
 
-  } catch (error) {
+  } catch (error: any) {
     console.log(`      ⚠️ AI showcase generation failed: ${error.message}`)
     return null
   }
 }
 
-function cleanupGeneratedCode(code: string): string {
-  // Remove any leading/trailing backticks
-  code = code.replace(/^```[\w]*\n?/, '').replace(/\n?```$/, '')
-
-  // Remove any markdown language specifiers
-  code = code.replace(/^tsx\n/, '').replace(/^typescript\n/, '').replace(/^javascript\n/, '')
-
-  // Ensure proper line endings
-  code = code.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
-
-  // Remove extra empty lines at start/end
-  code = code.trim()
-
-  return code
+function formatComponentListForPrompt(components: ComponentInfo[]): string {
+  return components
+    .map(comp => `- ${comp.name} (${comp.type}) - ./components/atoms/${comp.name}/${comp.name}`)
+    .join('\n')
 }
 
+async function callClaudeAPI(prompt: string, apiKey: string): Promise<string> {
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 4000,
+      messages: [{
+        role: 'user',
+        content: prompt
+      }]
+    })
+  })
+
+  if (!response.ok) {
+    throw new Error(`Claude API error: ${response.status}`)
+  }
+
+  const result = await response.json()
+  return result.content[0]?.text || ''
+}
+
+function extractShowcaseContent(claudeResponse: string): string | null {
+  const contentMatch = claudeResponse.match(/---APP_CONTENT---\s*\n([\s\S]*?)(?:\n---NOTES---|$)/)
+
+  if (!contentMatch) {
+    return null
+  }
+
+  let content = contentMatch[1].trim()
+  content = cleanupGeneratedCode(content)
+
+  // Extract and log notes if available
+  const notesMatch = claudeResponse.match(/---NOTES---\s*\n([\s\S]*?)$/)
+  if (notesMatch) {
+    const notes = notesMatch[1].trim()
+    console.log(`      📝 Implementation notes: ${notes.substring(0, 100)}...`)
+  }
+
+  return content
+}
+
+function cleanupGeneratedCode(code: string): string {
+  return code
+    // Remove leading/trailing backticks
+    .replace(/^```[\w]*\n?/, '')
+    .replace(/\n?```$/, '')
+    // Remove markdown language specifiers
+    .replace(/^(tsx|typescript|javascript)\n/, '')
+    // Normalize line endings
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    // Remove extra whitespace
+    .trim()
+}
 
 export async function saveShowcaseAnalysis(
-  components: Array<{name: string, type: string}>,
+  components: Array<{ name: string, type: string }>,
   showcaseImplementation: string
 ): Promise<void> {
   const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
-  const filename = resolve(rootDir, `outputs/component-showcase-${timestamp}.md`)
+  const outputPath = resolve(CLI_ROOT_DIR, `outputs/component-showcase-${timestamp}.md`)
 
-  const markdown = `# Component Showcase Implementation
+  const analysisMarkdown = generateAnalysisMarkdown(components, showcaseImplementation)
+
+  try {
+    writeFileSync(outputPath, analysisMarkdown)
+    console.log(`      📝 Saved showcase analysis to: ${outputPath}`)
+  } catch (error: any) {
+    console.log(`      ❌ Failed to save showcase analysis: ${error.message}`)
+  }
+}
+
+function generateAnalysisMarkdown(
+  components: Array<{ name: string, type: string }>,
+  implementation: string
+): string {
+  const componentSections = components
+    .map((comp, i) =>
+      `### ${i + 1}. ${comp.name}\n- **Type:** ${comp.type}\n- **Category:** Atomic Component`
+    )
+    .join('\n\n')
+
+  return `# Component Showcase Implementation
 
 **Generated:** ${new Date().toLocaleString()}
 **Components Showcased:** ${components.length}
 
 ## Components Included
 
-${components.map((comp, i) => `### ${i + 1}. ${comp.name}
-- **Type:** ${comp.type}
-- **Category:** Atomic Component
-`).join('\n')}
+${componentSections}
 
 ## Implementation Details
 
-${showcaseImplementation}
+${implementation}
 
 ---
 *Generated by Figma-to-Atomic-Design CLI*`
-
-  try {
-    writeFileSync(filename, markdown)
-    console.log(`      📝 Saved showcase analysis to: ${filename}`)
-  } catch (error) {
-    console.log(`      ❌ Failed to save showcase analysis: ${error.message}`)
-  }
 }

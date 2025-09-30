@@ -1,8 +1,8 @@
 # figma-to-atomic-design
 
-> Transform Figma designs into production-ready React components with atomic design, shadcn/ui, and design tokens.
+> Transform Figma designs into production-ready React components with atomic design, shadcn/ui, and comprehensive component showcases.
 
-A comprehensive CLI tool that uses AI (Claude) to analyze Figma designs and automatically generate TypeScript React components with proper atomic design structure, shadcn/ui integration, and design token extraction.
+A comprehensive CLI tool that uses AI (Claude) to analyze Figma designs and automatically generate TypeScript React components with proper atomic design structure, shadcn/ui integration, design token extraction, and interactive component showcases.
 
 ## 📋 Repository Overview
 
@@ -13,23 +13,21 @@ A comprehensive CLI tool that uses AI (Claude) to analyze Figma designs and auto
 
 **For external projects**, this tool would eventually be published as an NPM package that you run in your own Vite + React + TypeScript projects.
 
-## 🚀 Quick Start
+## ⚙️ Setup & Configuration
 
-### 🔧 Using This Tool in External Projects (Future NPM Package)
+### API Keys Required
+
+1. **Figma Token**: https://figma.com/developers/api#access-tokens
+2. **Claude API Key**: https://console.anthropic.com/
 
 ```bash
-# In your Vite + React + TypeScript project:
-
-# Set up API keys first
-echo "FIGMA_ACCESS_TOKEN=your_token" >> .env
-echo "ANTHROPIC_API_KEY=your_key" >> .env
-
-# Run the tool (when published)
-npx figma-to-atomic "https://figma.com/design/YOUR_FILE_KEY/Design?node-id=X-Y"
-
-# Generated components will appear in:
-# src/components/atoms/ComponentName/ComponentName.tsx
+# .env file
+FIGMA_ACCESS_TOKEN=figd_your_figma_token
+ANTHROPIC_API_KEY=sk-ant-your_claude_key
 ```
+
+
+## 🚀 Quick Start
 
 ### 🛠️ Developing This Repository
 
@@ -47,35 +45,44 @@ cp .env.example .env
 cd test-project
 npm run figma "FIGMA_URL"
 
-# Or test from root (analysis only, no project integration)
-cd ..
-npm run dev "FIGMA_URL" --skip-setup --output ./outputs
+# View the generated showcase
+npm run dev
+# Open http://localhost:5173 to see component showcase
 ```
 
-## ✨ What It Does
+### 🔧 Using This Tool in External Projects (Future NPM Package)
 
-1. **🔍 Analyzes Figma designs** using AI to identify atomic components
-2. **📦 Detects your project** (Vite + React + TypeScript)
-3. **⚙️ Configures everything** automatically (Tailwind, shadcn/ui, CVA)
-4. **🎨 Extracts design tokens** (colors, typography, spacing, shadows)
-5. **🧩 Generates React components** with CVA variants and TypeScript
-6. **🎭 Creates design system** with CSS variables and atomic structure
+```bash
+# In your Vite + React + TypeScript project:
+
+# Set up API keys first
+echo "FIGMA_ACCESS_TOKEN=your_token" >> .env
+echo "ANTHROPIC_API_KEY=your_key" >> .env
+
+# Run the tool (when published)
+npx figma-to-atomic "https://figma.com/design/YOUR_FILE_KEY/Design?node-id=X-Y"
+
+# Generated components will appear in:
+# src/components/atoms/ComponentName/ComponentName.tsx
+# src/App.tsx - Interactive component showcase
+```
 
 ## 🏗️ Architecture
 
-This project uses a clean, modular architecture with a 5-step processing pipeline:
+This project uses a clean, modular architecture with a **6-step processing pipeline**:
 
 ```
 figma-to-atomic-design/
 ├── cli.ts                    # Main CLI entry point
 ├── index.ts                  # Library entry point
 ├── lib/                      # All implementation code
-│   ├── steps/                # 5-step processing pipeline
-│   │   ├── step-01-url-processing/      # URL parsing & API validation
+│   ├── steps/                # 6-step processing pipeline
+│   │   ├── step-01-url-processing/         # URL parsing & API validation
 │   │   ├── step-02-section-identification/ # Figma data fetching
-│   │   ├── step-03-atom-discovery/      # AI component identification
-│   │   ├── step-04-deep-atom-analysis/  # Component implementation
-│   │   └── step-05-token-extraction/    # Design token extraction
+│   │   ├── step-03-atom-discovery/         # AI component identification
+│   │   ├── step-04-deep-atom-analysis/     # Token & variant analysis
+│   │   ├── step-05-component-generation/   # React component generation
+│   │   └── step-06-component-showcase/     # Interactive App.tsx showcase
 │   ├── setup/                # Project setup utilities
 │   ├── utils/                # Helper functions
 │   ├── resources/            # Reference data (shadcn components)
@@ -85,13 +92,14 @@ figma-to-atomic-design/
 └── Documentation...
 ```
 
-### 5-Step Processing Pipeline
+### 6-Step Processing Pipeline
 
 1. **URL Processing** - Parse Figma URLs and validate API keys
 2. **Section Identification** - Fetch Figma data and identify UI sections
 3. **Atom Discovery** - Use AI to identify atomic components
-4. **Deep Analysis** - Generate implementation with shadcn/ui + CVA
-5. **Token Extraction** - Extract design tokens as CSS variables
+4. **Deep Analysis** - Extract design tokens and analyze variants
+5. **Component Generation** - Generate React components with shadcn/ui + CVA
+6. **Component Showcase** - Create interactive App.tsx demonstrating all components
 
 ## 📁 Generated Output Structure
 
@@ -99,21 +107,23 @@ figma-to-atomic-design/
 ```
 outputs/
 ├── section-analysis-*.md              # AI analysis of sections
+├── component-showcase-*.md            # Showcase implementation details
 └── components/
     └── atoms/
         └── ComponentName/
             ├── ComponentName.tsx      # React component
-            ├── analysis.json          # Component data
-            └── README.md              # Human-readable analysis
+            └── summary.json           # Component metadata
 ```
 
 ### Target Project Integration
 ```
 your-project/src/
+├── App.tsx                            # Interactive component showcase
+├── index.css                         # Design tokens + Tailwind v4
 └── components/
     └── atoms/
         └── ComponentName/
-            └── ComponentName.tsx      # Auto-copied for development
+            └── ComponentName.tsx      # Generated component
 ```
 
 ## 🧩 Generated Component Example
@@ -122,118 +132,102 @@ your-project/src/
 import React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
 
-const primaryButtonVariants = cva(
-  "inline-flex items-center justify-center rounded-md text-sm font-medium",
+const buttonVariants = cva(
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+        primary: "bg-primary text-primary-foreground hover:bg-primary/90",
+        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        outline: "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+        ghost: "hover:bg-accent hover:text-accent-foreground"
       },
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 rounded-md px-3"
+        sm: "h-9 rounded-md px-3",
+        md: "h-10 px-4 py-2",
+        lg: "h-11 rounded-md px-8"
       }
     },
-    defaultVariants: { variant: "default", size: "default" }
+    defaultVariants: {
+      variant: "primary",
+      size: "md"
+    }
   }
 )
 
-export interface PrimaryButtonProps
-  extends React.ComponentProps<typeof Button>,
-    VariantProps<typeof primaryButtonVariants> {}
+export interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {
+  loading?: boolean
+}
 
-const PrimaryButton = React.forwardRef<
-  React.ElementRef<typeof Button>,
-  PrimaryButtonProps
->(({ className, variant, size, ...props }, ref) => {
-  return (
-    <Button
-      className={cn(primaryButtonVariants({ variant, size, className }))}
-      ref={ref}
-      {...props}
-    />
-  )
-})
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant, size, loading, children, disabled, ...props }, ref) => {
+    return (
+      <button
+        className={cn(buttonVariants({ variant, size, className }))}
+        ref={ref}
+        disabled={disabled || loading}
+        {...props}
+      >
+        {loading ? "Loading..." : children}
+      </button>
+    )
+  }
+)
 
-PrimaryButton.displayName = "PrimaryButton"
-export { PrimaryButton, primaryButtonVariants }
+Button.displayName = "Button"
+export { Button, buttonVariants }
 ```
 
-## ⚙️ Setup & Configuration
+## 🎨 Design Token System
 
-### API Keys Required
+### Tailwind CSS v4 Integration
 
-1. **Figma Token**: https://figma.com/developers/api#access-tokens
-2. **Claude API Key**: https://console.anthropic.com/
+The tool generates modern **Tailwind CSS v4** compatible styles:
 
-```bash
-# .env file
-FIGMA_ACCESS_TOKEN=figd_your_figma_token
-ANTHROPIC_API_KEY=sk-ant-your_claude_key
-```
+```css
+@import "tailwindcss";
 
-### CLI Options
+@theme {
+  --color-background: 0 0% 100%;
+  --color-foreground: 0 0% 0%;
+  --color-primary: 222.2 84% 4.9%;
+  --color-secondary: 210 40% 96%;
+  --color-border: 214.3 31.8% 91.4%;
+}
 
-```bash
-figma-atomic "FIGMA_URL" [options]
+:root {
+  /* Figma-extracted design tokens */
+  --brand-50: #eff6ff;
+  --brand-500: #3b82f6;
+  --brand-900: #1e3a8a;
 
-Options:
-  -o, --output DIR        Output directory (default: ./src)
-  --figma-token TOKEN     Figma access token
-  --claude-key KEY        Claude API key
-  --skip-setup           Skip project setup (Tailwind, shadcn)
-  --help                 Show help
+  /* Typography */
+  --font-inter: 'Inter', system-ui, sans-serif;
+
+  /* Spacing scale */
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Component-specific tokens */
+  --button-height: 40px;
+  --button-border-radius: 6px;
+  --input-background: #ffffff;
+  --input-border: #9e9e9e;
+}
 ```
 
 ### Project Requirements
 
 - **Vite + React + TypeScript** project (for full integration)
 - **Node.js 18+**
+- **Tailwind CSS v4** (automatically configured)
 - Valid Figma design URL
 
-## 🧪 Testing This Repository
-
-**This repository provides multiple ways to test the tool during development:**
-
-```bash
-# 1. Test package structure (no API keys needed)
-npm run test:demo
-
-# 2. Test with real Figma design in the test-project (API keys required)
-cd test-project
-npm run figma "FIGMA_URL"
-
-# 3. Test from root (analysis only, generates in ./outputs)
-npm run dev "FIGMA_URL" --skip-setup --output ./outputs
-```
-
-For detailed testing instructions, see [TESTING.md](./TESTING.md).
-
 **Note**: When this tool is published as an NPM package, external users would simply run `npx figma-to-atomic "FIGMA_URL"` in their own projects.
-
-## 🎨 Design Token System
-
-Extracted tokens become CSS variables:
-
-```css
-:root {
-  /* Figma-extracted colors */
-  --brand-primary: #3B82F6;
-  --neutral-0: #ffffff;
-  --neutral-900: #000000;
-
-  /* Typography */
-  --text-sm: 0.875rem;
-  --text-base: 1rem;
-
-  /* Spacing */
-  --space-4: 1rem;
-  --space-8: 2rem;
-}
-```
 
 ## 🛠️ Development
 
@@ -248,75 +242,40 @@ Extracted tokens become CSS variables:
 
 - **`cli.ts`** - Main CLI interface
 - **`index.ts`** - Library interface for programmatic use
-- **`lib/steps/`** - Core processing pipeline
+- **`lib/steps/`** - Core 6-step processing pipeline
 - **`lib/setup/`** - Project configuration utilities
-
-### Development Commands
-
-```bash
-# Build TypeScript (for NPM distribution)
-npm run build
-
-# Test the CLI with a Figma URL
-npm run dev "FIGMA_URL"
-
-# Test package structure without API calls
-npm run test:demo
-
-# Run the test Vite project
-npm run test:vite
-```
-
-### Current State
-
-- ✅ **Fully functional CLI** - Works for analyzing Figma designs
-- ✅ **Complete component generation** - TypeScript + CVA + shadcn/ui
-- ✅ **Design token extraction** - CSS variables generated
-- 🚧 **NPM package** - Ready for publishing when needed
-- ✅ **Test environment** - Complete test-project for development
+- **`lib/utils/shadcn-loader.ts`** - Dynamic shadcn component loading
 
 ## 📊 Component Analysis Data
 
-Each generated component includes comprehensive analysis:
+Each generated component includes comprehensive metadata:
 
 ```json
 {
-  "meta": {
-    "name": "Primary Button",
-    "type": "button",
-    "figmaId": "123:456"
-  },
-  "designTokens": {
-    "colors": { "primitives": [...] },
-    "typography": [...],
-    "spacing": {...}
-  },
-  "implementation": {
-    "shadcnComponent": "Button",
-    "variants": [...],
-    "cvaVariants": {...}
-  }
+  "name": "Button",
+  "figmaId": "123:456",
+  "atomicType": "button",
+  "generatedAt": "2025-09-29T00:00:00.000Z",
+  "usageExample": "<Button variant='primary' size='lg'>Click me</Button>",
+  "variantCount": 12
 }
 ```
 
 ## 🚀 Workflow
 
+### For This Repository (Development)
+1. **Design in Figma** - Create your UI designs
+2. **Test CLI** - `cd test-project && npm run figma "FIGMA_URL"`
+3. **View Showcase** - `npm run dev` to see interactive component demo
+4. **Review Output** - Check generated components and analysis files
+5. **Iterate** - Modify the tool and retest
+
 ### For External Projects (Future)
 1. **Design in Figma** - Create your UI designs
 2. **Run CLI** - `npx figma-to-atomic "FIGMA_URL"` in your Vite + React + TS project
 3. **Get Components** - Production-ready React components generated in `src/components/atoms/`
-4. **Use Immediately** - Import and use in your React app
-
-### For This Repository (Development)
-1. **Design in Figma** - Create your UI designs
-2. **Test CLI** - `cd test-project && npm run figma "FIGMA_URL"`
-3. **Review Output** - Check generated components and analysis files
-4. **Iterate** - Modify the tool and retest
-
-## 📚 Documentation
-
-- **[NPM-PACKAGE.md](./NPM-PACKAGE.md)** - Detailed usage as NPM package
-- **[TESTING.md](./TESTING.md)** - Comprehensive testing guide
+4. **View Showcase** - Interactive demo automatically created in `src/App.tsx`
+5. **Use Immediately** - Import and use in your React app
 
 ## 🤝 Contributing
 
@@ -326,16 +285,6 @@ Each generated component includes comprehensive analysis:
 4. Test with the test-project
 5. Submit a pull request
 
-## ⚡ Features
-
-- ✅ **Modular architecture** - Clean separation of concerns
-- ✅ **AI-powered analysis** - Intelligent component identification
-- ✅ **Production-ready code** - TypeScript, CVA, shadcn/ui
-- ✅ **Design token extraction** - Automated CSS variable generation
-- ✅ **Atomic design** - Proper component organization
-- ✅ **Project integration** - Automatic setup and configuration
-- ✅ **Comprehensive testing** - Multiple testing approaches
-
 ---
 
-**Transform your Figma designs into production code in minutes, not hours.** 🎉
+**Transform your Figma designs into production code with interactive showcases in minutes, not hours.** 🎉
